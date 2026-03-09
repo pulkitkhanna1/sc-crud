@@ -5,7 +5,7 @@ const router = Router();
 type Handler = (req: any, res: any) => Promise<void>;
 
 async function workflowService() {
-  return import("../lib/workflowService");
+  return import("../lib/workflowService.js");
 }
 
 function route(handler: Handler) {
