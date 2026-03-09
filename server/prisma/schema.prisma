@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum PersonRole {
+  WRITER
+  POD_LEAD
+  BUSINESS
+}
+
+enum IdeaStatus {
+  NOT_REVIEWED
+  ACCEPTED
+  REJECTED
+}
+
+enum IdeaRank {
+  UNRANKED
+  HIGH_CONVICTION
+  BET
+  REJECT
+}
+
+enum BeatAssigneeRole {
+  WRITER
+  POD_LEAD
+}
+
+enum BeatStatus {
+  ASSIGNED
+  SUBMITTED
+  APPROVED_FOR_SCRIPT_WRITING
+  TO_BE_REDONE
+}
+
+enum AssignmentType {
+  NEW
+  IMPROVEMENT
+}
+
+enum AssignmentStatus {
+  ASSIGNED_TO_WRITER
+  COMPLETED_BY_WRITER
+  READY_FOR_PRODUCTION
+  REWRITE_REQUIRED
+}
+
+enum AssignmentGrade {
+  STRONG_OUTPUT
+  MINOR_FLAWS
+  MAJOR_FLAWS
+  REDO
+}
+
+enum ProductionType {
+  GA
+  GU
+}
+
+model Person {
+  id                  String       @id @default(cuid())
+  name                String       @unique
+  role                PersonRole
+  ideasSubmitted      Idea[]       @relation("IdeaSubmittedBy")
+  beatsAssigned       Beat[]       @relation("BeatAssignedTo")
+  beatsReviewed       Beat[]       @relation("BeatReviewedBy")
+  writingAssignments  Assignment[] @relation("AssignmentWriter")
+  podAssignments      Assignment[] @relation("AssignmentPodLead")
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+}
+
+model WorkflowCounter {
+  key   String @id
+  value Int
+}
+
+model Idea {
+  id            String     @id @default(cuid())
+  code          String     @unique
+  show          String
+  angle         String
+  submittedById String
+  submittedBy   Person     @relation("IdeaSubmittedBy", fields: [submittedById], references: [id])
+  submittedOn   DateTime
+  status        IdeaStatus @default(NOT_REVIEWED)
+  rank          IdeaRank   @default(UNRANKED)
+  setting       String
+  opening       String
+  tickingClock  String
+  stakes        String
+  goal          String
+  cliffhanger   String
+  note          String
+  beats         Beat[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model Beat {
+  id                   String           @id @default(cuid())
+  code                 String           @unique
+  ideaId               String
+  idea                 Idea             @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  title                String
+  setting              String
+  opening              String
+  tickingClock         String
+  stakes               String
+  goal                 String
+  cliffhanger          String
+  note                 String
+  docLink              String?
+  assignedToId         String
+  assignedTo           Person           @relation("BeatAssignedTo", fields: [assignedToId], references: [id])
+  assignedRole         BeatAssigneeRole
+  requestRaisedOn      DateTime
+  expectedStartDate    DateTime
+  expectedCompleteDate DateTime
+  status               BeatStatus       @default(ASSIGNED)
+  submittedOn          DateTime?
+  reviewedById         String?
+  reviewedBy           Person?          @relation("BeatReviewedBy", fields: [reviewedById], references: [id])
+  reviewedOn           DateTime?
+  reviewNotes          String?
+  assignments          Assignment[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+}
+
+model Assignment {
+  id                  String            @id @default(cuid())
+  code                String            @unique
+  assignmentType      AssignmentType
+  beatId              String?
+  beat                Beat?             @relation(fields: [beatId], references: [id], onDelete: SetNull)
+  show                String
+  angle               String
+  writerId            String
+  writer              Person            @relation("AssignmentWriter", fields: [writerId], references: [id])
+  podLeadId           String
+  podLead             Person            @relation("AssignmentPodLead", fields: [podLeadId], references: [id])
+  dateAssigned        DateTime
+  dateDue             DateTime
+  notes               String?
+  status              AssignmentStatus  @default(ASSIGNED_TO_WRITER)
+  submission          String?
+  grade               AssignmentGrade?
+  feedback            String?
+  finalOutput         String?
+  prodSuffix          ProductionType?
+  submittedAt         DateTime?
+  reviewedAt          DateTime?
+  productionReadyAt   DateTime?
+  parentAssignmentId  String?
+  parentAssignment    Assignment?       @relation("AssignmentRework", fields: [parentAssignmentId], references: [id])
+  childAssignments    Assignment[]      @relation("AssignmentRework")
+  editCode            String
+  codeToRework        String?
+  updatedBeats        String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
