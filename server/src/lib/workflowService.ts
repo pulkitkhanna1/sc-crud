@@ -22,6 +22,8 @@ const BEAT_STATUS_VALUES = Object.values(BeatStatus);
 const ASSIGNMENT_TYPE_VALUES = Object.values(AssignmentType);
 const ASSIGNMENT_GRADE_VALUES = Object.values(AssignmentGrade);
 const PRODUCTION_TYPE_VALUES = Object.values(ProductionType);
+const DEFAULT_SHOWS = ["MVS", "FLBM", "WBT"] as const;
+const DEFAULT_SHOW_SET = new Set<string>(DEFAULT_SHOWS);
 
 const ideaInclude = {
   submittedBy: true,
@@ -48,6 +50,16 @@ function serializeShow(show: {
     id: show.id,
     name: show.name,
   };
+}
+
+async function ensureDefaultShows(tx: Prisma.TransactionClient) {
+  for (const name of DEFAULT_SHOWS) {
+    await tx.show.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+  }
 }
 
 function formatDate(date: Date | null) {
@@ -198,34 +210,38 @@ function serializeAssignment(
 }
 
 export async function getWorkflowSnapshot() {
-  const [shows, people, ideas, beats, assignments] = await prisma.$transaction([
-    prisma.show.findMany({
-      orderBy: { name: "asc" },
-    }),
-    prisma.person.findMany({
-      orderBy: [{ role: "asc" }, { name: "asc" }],
-    }),
-    prisma.idea.findMany({
-      include: ideaInclude,
-      orderBy: { submittedOn: "desc" },
-    }),
-    prisma.beat.findMany({
-      include: beatInclude,
-      orderBy: { requestRaisedOn: "desc" },
-    }),
-    prisma.assignment.findMany({
-      include: assignmentInclude,
-      orderBy: { dateAssigned: "desc" },
-    }),
-  ]);
+  return prisma.$transaction(async (tx) => {
+    await ensureDefaultShows(tx);
 
-  return {
-    shows: shows.map(serializeShow),
-    people: people.map(serializePerson),
-    ideas: ideas.map(serializeIdea),
-    beats: beats.map(serializeBeat),
-    assignments: assignments.map(serializeAssignment),
-  };
+    const [shows, people, ideas, beats, assignments] = await Promise.all([
+      tx.show.findMany({
+        orderBy: { name: "asc" },
+      }),
+      tx.person.findMany({
+        orderBy: [{ role: "asc" }, { name: "asc" }],
+      }),
+      tx.idea.findMany({
+        include: ideaInclude,
+        orderBy: { submittedOn: "desc" },
+      }),
+      tx.beat.findMany({
+        include: beatInclude,
+        orderBy: { requestRaisedOn: "desc" },
+      }),
+      tx.assignment.findMany({
+        include: assignmentInclude,
+        orderBy: { dateAssigned: "desc" },
+      }),
+    ]);
+
+    return {
+      shows: shows.map(serializeShow),
+      people: people.map(serializePerson),
+      ideas: ideas.map(serializeIdea),
+      beats: beats.map(serializeBeat),
+      assignments: assignments.map(serializeAssignment),
+    };
+  });
 }
 
 export async function createIdea(payload: Record<string, unknown>) {
@@ -626,6 +642,10 @@ export async function removeShow(id: string) {
 
   if (!show) {
     throw new AppError("Show was not found.", 404);
+  }
+
+  if (DEFAULT_SHOW_SET.has(show.name)) {
+    throw new AppError("Default shows cannot be removed.", 409);
   }
 
   const [ideaCount, assignmentCount] = await Promise.all([

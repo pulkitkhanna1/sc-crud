@@ -23,6 +23,8 @@ interface AdminPageProps {
   onLock(): void;
 }
 
+const CORE_SHOWS = new Set(["MVS", "FLBM", "WBT"]);
+
 const emptyPersonForm = (): CreatePersonInput => ({
   name: "",
   role: "WRITER",
@@ -271,18 +273,26 @@ export function AdminPage({ snapshot, actions, busy, adminUnlocked, onLock }: Ad
                   <div className="stack-list">
                     {snapshot.shows.map((show) => {
                       const isLinked = linkedShows.has(show.name);
+                      const isCoreShow = CORE_SHOWS.has(show.name);
 
                       return (
                         <div className="person-row" key={show.id}>
                           <div>
                             <strong>{show.name}</strong>
-                            <p className="muted-copy">{isLinked ? "Already used in workflow data" : "Unused and safe to remove"}</p>
+                            <p className="muted-copy">
+                              {isCoreShow
+                                ? "Core default show kept in every workspace"
+                                : isLinked
+                                  ? "Already used in workflow data"
+                                  : "Unused and safe to remove"}
+                            </p>
                           </div>
                           <div className="button-row">
+                            {isCoreShow ? <Badge tone="info">Default</Badge> : null}
                             <Badge tone={isLinked ? "warning" : "success"}>{isLinked ? "In use" : "Unused"}</Badge>
                             <button
                               className="ghost-button"
-                              disabled={busy || isLinked}
+                              disabled={busy || isLinked || isCoreShow}
                               type="button"
                               onClick={() => void handleRemoveShow(show.id)}
                             >
