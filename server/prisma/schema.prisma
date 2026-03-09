@@ -83,6 +83,16 @@ model Show {
   updatedAt DateTime @updatedAt
 }
 
+model AdminLog {
+  id          String   @id @default(cuid())
+  action      String
+  targetType  String
+  targetId    String?
+  targetLabel String
+  payload     Json
+  createdAt   DateTime @default(now())
+}
+
 model WorkflowCounter {
   key   String @id
   value Int

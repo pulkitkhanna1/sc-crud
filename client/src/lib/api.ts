@@ -20,19 +20,12 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 function normalizeWorkflowSnapshot(snapshot: Partial<WorkflowSnapshot>): WorkflowSnapshot {
   return {
     shows: Array.isArray(snapshot.shows) ? snapshot.shows : [],
+    adminLogs: Array.isArray(snapshot.adminLogs) ? snapshot.adminLogs : [],
     people: Array.isArray(snapshot.people) ? snapshot.people : [],
     ideas: Array.isArray(snapshot.ideas) ? snapshot.ideas : [],
     beats: Array.isArray(snapshot.beats) ? snapshot.beats : [],
     assignments: Array.isArray(snapshot.assignments) ? snapshot.assignments : [],
   };
-}
-
-function createAdminHeaders(adminPassword?: string) {
-  return adminPassword
-    ? {
-        "x-admin-password": adminPassword,
-      }
-    : {};
 }
 
 async function request<T>(path: string, init?: RequestInit) {
@@ -70,11 +63,6 @@ export const api = {
   async getWorkflow() {
     const snapshot = await request<Partial<WorkflowSnapshot>>("/workflow");
     return normalizeWorkflowSnapshot(snapshot);
-  },
-  validateAdminPassword(adminPassword: string) {
-    return request("/admin/validate", {
-      headers: createAdminHeaders(adminPassword),
-    });
   },
   createIdea(input: CreateIdeaInput) {
     return request("/ideas", {
@@ -136,30 +124,26 @@ export const api = {
       body: JSON.stringify(input),
     });
   },
-  createPerson(input: CreatePersonInput, adminPassword: string) {
+  createPerson(input: CreatePersonInput) {
     return request("/admin/people", {
       method: "POST",
-      headers: createAdminHeaders(adminPassword),
       body: JSON.stringify(input),
     });
   },
-  removePerson(id: string, adminPassword: string) {
+  removePerson(id: string) {
     return request(`/admin/people/${id}`, {
       method: "DELETE",
-      headers: createAdminHeaders(adminPassword),
     });
   },
-  createShow(input: CreateShowInput, adminPassword: string) {
+  createShow(input: CreateShowInput) {
     return request("/admin/shows", {
       method: "POST",
-      headers: createAdminHeaders(adminPassword),
       body: JSON.stringify(input),
     });
   },
-  removeShow(id: string, adminPassword: string) {
+  removeShow(id: string) {
     return request(`/admin/shows/${id}`, {
       method: "DELETE",
-      headers: createAdminHeaders(adminPassword),
     });
   },
 };

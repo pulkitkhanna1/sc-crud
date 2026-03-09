@@ -43,6 +43,7 @@ function timestamp(value: string) {
 }
 
 async function main() {
+  await prisma.adminLog.deleteMany();
   await prisma.assignment.deleteMany();
   await prisma.beat.deleteMany();
   await prisma.idea.deleteMany();

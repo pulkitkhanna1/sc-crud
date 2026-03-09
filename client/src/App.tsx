@@ -44,8 +44,6 @@ export default function App() {
   const [role, setRole] = useState<PersonRole | "">("");
   const [personId, setPersonId] = useState("");
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
-  const [adminPassword, setAdminPassword] = useState("");
-  const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [toast, setToast] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
 
   useEffect(() => {
@@ -62,18 +60,6 @@ export default function App() {
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem("cpi-theme", theme);
   }, [theme]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const storedPassword = window.sessionStorage.getItem("cpi-admin-password");
-    if (storedPassword) {
-      setAdminPassword(storedPassword);
-      setAdminUnlocked(true);
-    }
-  }, []);
 
   async function loadWorkflow() {
     const data = await api.getWorkflow();
@@ -156,16 +142,6 @@ export default function App() {
 
   const actions: WorkflowActions = {
     refresh: () => mutate(async () => undefined, "Workflow refreshed."),
-    validateAdminPassword: async (password) => {
-      await api.validateAdminPassword(password);
-      setAdminPassword(password);
-      setAdminUnlocked(true);
-      window.sessionStorage.setItem("cpi-admin-password", password);
-      setToast({
-        tone: "success",
-        message: "Admin unlocked.",
-      });
-    },
     createIdea: (input) => mutate(() => api.createIdea(input), "Idea saved."),
     reviewIdea: (id, input) => mutate(() => api.reviewIdea(id, input), "Idea updated."),
     createBeat: (input) => mutate(() => api.createBeat(input), "Beat created."),
@@ -178,10 +154,10 @@ export default function App() {
     submitAssignment: (id, input) => mutate(() => api.submitAssignment(id, input), "Script submitted."),
     reviewAssignment: (id, input) => mutate(() => api.reviewAssignment(id, input), "Assignment review saved."),
     markAssignmentReady: (id, input) => mutate(() => api.markAssignmentReady(id, input), "Marked ready for production."),
-    createPerson: (input) => mutate(() => api.createPerson(input, adminPassword), "Person added."),
-    removePerson: (id) => mutate(() => api.removePerson(id, adminPassword), "Person removed."),
-    createShow: (input) => mutate(() => api.createShow(input, adminPassword), "Show added."),
-    removeShow: (id) => mutate(() => api.removeShow(id, adminPassword), "Show removed."),
+    createPerson: (input) => mutate(() => api.createPerson(input), "Person added."),
+    removePerson: (id) => mutate(() => api.removePerson(id), "Person removed."),
+    createShow: (input) => mutate(() => api.createShow(input), "Show added."),
+    removeShow: (id) => mutate(() => api.removeShow(id), "Show removed."),
   };
 
   if (loading) {
@@ -294,28 +270,13 @@ export default function App() {
 
       <main className="workspace-shell">
         {view === "admin" ? (
-          <AdminPage
-            actions={actions}
-            adminUnlocked={adminUnlocked}
-            busy={busy}
-            onLock={() => {
-              setAdminPassword("");
-              setAdminUnlocked(false);
-              window.sessionStorage.removeItem("cpi-admin-password");
-              setToast({
-                tone: "success",
-                message: "Admin locked.",
-              });
-            }}
-            snapshot={snapshot}
-          />
+          <AdminPage actions={actions} busy={busy} snapshot={snapshot} />
         ) : isBootstrapMode ? (
           <div className="center-shell">
             <div className="loading-card">
               <h1>Finish workspace setup</h1>
               <p>
-                The database is missing {missingSetupItems}. Open the Admin tab, unlock it with the password, and add them
-                before using the workflow.
+                The database is missing {missingSetupItems}. Open the Admin tab and add them before using the workflow.
               </p>
             </div>
           </div>

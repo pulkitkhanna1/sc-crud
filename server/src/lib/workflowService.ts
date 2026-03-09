@@ -52,6 +52,26 @@ function serializeShow(show: {
   };
 }
 
+function serializeAdminLog(log: {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  targetLabel: string;
+  payload: Prisma.JsonValue;
+  createdAt: Date;
+}) {
+  return {
+    id: log.id,
+    action: log.action,
+    targetType: log.targetType,
+    targetId: log.targetId,
+    targetLabel: log.targetLabel,
+    payload: log.payload,
+    createdAt: formatDateTime(log.createdAt),
+  };
+}
+
 async function ensureDefaultShows(tx: Prisma.TransactionClient) {
   for (const name of DEFAULT_SHOWS) {
     await tx.show.upsert({
@@ -68,6 +88,27 @@ function formatDate(date: Date | null) {
 
 function formatDateTime(date: Date | null) {
   return date ? date.toISOString() : null;
+}
+
+async function recordAdminLog(
+  tx: Prisma.TransactionClient,
+  entry: {
+    action: string;
+    targetType: string;
+    targetId?: string | null;
+    targetLabel: string;
+    payload: Prisma.InputJsonValue;
+  },
+) {
+  await tx.adminLog.create({
+    data: {
+      action: entry.action,
+      targetType: entry.targetType,
+      targetId: entry.targetId ?? null,
+      targetLabel: entry.targetLabel,
+      payload: entry.payload,
+    },
+  });
 }
 
 async function nextCode(
@@ -213,7 +254,7 @@ export async function getWorkflowSnapshot() {
   return prisma.$transaction(async (tx) => {
     await ensureDefaultShows(tx);
 
-    const [shows, people, ideas, beats, assignments] = await Promise.all([
+    const [shows, people, ideas, beats, assignments, adminLogs] = await Promise.all([
       tx.show.findMany({
         orderBy: { name: "asc" },
       }),
@@ -232,6 +273,9 @@ export async function getWorkflowSnapshot() {
         include: assignmentInclude,
         orderBy: { dateAssigned: "desc" },
       }),
+      tx.adminLog.findMany({
+        orderBy: { createdAt: "desc" },
+      }),
     ]);
 
     return {
@@ -240,6 +284,7 @@ export async function getWorkflowSnapshot() {
       ideas: ideas.map(serializeIdea),
       beats: beats.map(serializeBeat),
       assignments: assignments.map(serializeAssignment),
+      adminLogs: adminLogs.map(serializeAdminLog),
     };
   });
 }
@@ -599,65 +644,129 @@ export async function createPerson(payload: Record<string, unknown>) {
   const name = requireString(payload.name, "Name");
   const role = parseEnumValue(payload.role, PERSON_ROLE_VALUES, "Role");
 
-  return prisma.person.create({
-    data: {
-      name,
-      role,
-    },
+  return prisma.$transaction(async (tx) => {
+    const person = await tx.person.create({
+      data: {
+        name,
+        role,
+      },
+    });
+
+    await recordAdminLog(tx, {
+      action: "CREATE_PERSON",
+      targetType: "PERSON",
+      targetId: person.id,
+      targetLabel: person.name,
+      payload: {
+        name: person.name,
+        role: person.role,
+      },
+    });
+
+    return person;
   });
 }
 
 export async function createShow(payload: Record<string, unknown>) {
   const name = requireString(payload.name, "Show name");
 
-  return prisma.show.create({
-    data: {
-      name,
-    },
+  return prisma.$transaction(async (tx) => {
+    const show = await tx.show.create({
+      data: {
+        name,
+      },
+    });
+
+    await recordAdminLog(tx, {
+      action: "CREATE_SHOW",
+      targetType: "SHOW",
+      targetId: show.id,
+      targetLabel: show.name,
+      payload: {
+        name: show.name,
+      },
+    });
+
+    return show;
   });
 }
 
 export async function removePerson(id: string) {
-  const [submittedIdeas, assignedBeats, reviewedBeats, writingAssignments, podAssignments] = await Promise.all([
-    prisma.idea.count({ where: { submittedById: id } }),
-    prisma.beat.count({ where: { assignedToId: id } }),
-    prisma.beat.count({ where: { reviewedById: id } }),
-    prisma.assignment.count({ where: { writerId: id } }),
-    prisma.assignment.count({ where: { podLeadId: id } }),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    const person = await tx.person.findUnique({
+      where: { id },
+    });
 
-  if (submittedIdeas + assignedBeats + reviewedBeats + writingAssignments + podAssignments > 0) {
-    throw new AppError("This person is already referenced in workflow data and cannot be deleted.", 409);
-  }
+    if (!person) {
+      throw new AppError("Person was not found.", 404);
+    }
 
-  await prisma.person.delete({
-    where: { id },
+    const [submittedIdeas, assignedBeats, reviewedBeats, writingAssignments, podAssignments] = await Promise.all([
+      tx.idea.count({ where: { submittedById: id } }),
+      tx.beat.count({ where: { assignedToId: id } }),
+      tx.beat.count({ where: { reviewedById: id } }),
+      tx.assignment.count({ where: { writerId: id } }),
+      tx.assignment.count({ where: { podLeadId: id } }),
+    ]);
+
+    if (submittedIdeas + assignedBeats + reviewedBeats + writingAssignments + podAssignments > 0) {
+      throw new AppError("This person is already referenced in workflow data and cannot be deleted.", 409);
+    }
+
+    await tx.person.delete({
+      where: { id },
+    });
+
+    await recordAdminLog(tx, {
+      action: "REMOVE_PERSON",
+      targetType: "PERSON",
+      targetId: person.id,
+      targetLabel: person.name,
+      payload: {
+        id: person.id,
+        name: person.name,
+        role: person.role,
+      },
+    });
   });
 }
 
 export async function removeShow(id: string) {
-  const show = await prisma.show.findUnique({
-    where: { id },
-  });
+  await prisma.$transaction(async (tx) => {
+    const show = await tx.show.findUnique({
+      where: { id },
+    });
 
-  if (!show) {
-    throw new AppError("Show was not found.", 404);
-  }
+    if (!show) {
+      throw new AppError("Show was not found.", 404);
+    }
 
-  if (DEFAULT_SHOW_SET.has(show.name)) {
-    throw new AppError("Default shows cannot be removed.", 409);
-  }
+    if (DEFAULT_SHOW_SET.has(show.name)) {
+      throw new AppError("Default shows cannot be removed.", 409);
+    }
 
-  const [ideaCount, assignmentCount] = await Promise.all([
-    prisma.idea.count({ where: { show: show.name } }),
-    prisma.assignment.count({ where: { show: show.name } }),
-  ]);
+    const [ideaCount, assignmentCount] = await Promise.all([
+      tx.idea.count({ where: { show: show.name } }),
+      tx.assignment.count({ where: { show: show.name } }),
+    ]);
 
-  if (ideaCount + assignmentCount > 0) {
-    throw new AppError("This show is already referenced in workflow data and cannot be deleted.", 409);
-  }
+    if (ideaCount + assignmentCount > 0) {
+      throw new AppError("This show is already referenced in workflow data and cannot be deleted.", 409);
+    }
 
-  await prisma.show.delete({
-    where: { id },
+    await tx.show.delete({
+      where: { id },
+    });
+
+    await recordAdminLog(tx, {
+      action: "REMOVE_SHOW",
+      targetType: "SHOW",
+      targetId: show.id,
+      targetLabel: show.name,
+      payload: {
+        id: show.id,
+        name: show.name,
+      },
+    });
   });
 }

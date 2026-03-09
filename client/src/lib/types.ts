@@ -23,6 +23,16 @@ export interface Show {
   name: string;
 }
 
+export interface AdminLog {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  targetLabel: string;
+  payload: unknown;
+  createdAt: string | null;
+}
+
 export interface Idea {
   id: string;
   code: string;
@@ -111,6 +121,7 @@ export interface Assignment {
 
 export interface WorkflowSnapshot {
   shows: Show[];
+  adminLogs: AdminLog[];
   people: Person[];
   ideas: Idea[];
   beats: Beat[];
@@ -223,7 +234,6 @@ export interface ReviewAssignmentResult {
 
 export interface WorkflowActions {
   refresh(): Promise<void>;
-  validateAdminPassword(password: string): Promise<void>;
   createIdea(input: CreateIdeaInput): Promise<void>;
   reviewIdea(id: string, input: ReviewIdeaInput): Promise<void>;
   createBeat(input: CreateBeatInput): Promise<void>;
