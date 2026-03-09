@@ -3,8 +3,8 @@ import { useMemo, useState } from "react";
 import { Badge } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
 import { Panel } from "@/components/Panel";
-import { PRODUCTION_TYPE_LABELS, PRODUCTION_TYPE_OPTIONS } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
+import { getSchemaVariableLabel, getSchemaVariableLabelMap, getSchemaVariableOptions } from "@/lib/schemaVariables";
 import type { SessionState, WorkflowSnapshot } from "@/lib/types";
 
 interface ProductionPageProps {
@@ -13,6 +13,8 @@ interface ProductionPageProps {
 }
 
 export function ProductionPage({ snapshot, session }: ProductionPageProps) {
+  const productionTypeOptions = useMemo(() => getSchemaVariableOptions(snapshot, "PRODUCTION_TYPE"), [snapshot]);
+  const productionTypeLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "PRODUCTION_TYPE"), [snapshot]);
   const [filters, setFilters] = useState({
     code: "",
     writerId: "",
@@ -74,9 +76,9 @@ export function ProductionPage({ snapshot, session }: ProductionPageProps) {
               onChange={(event) => setFilters((current) => ({ ...current, prodSuffix: event.target.value }))}
             >
               <option value="">All production types</option>
-              {PRODUCTION_TYPE_OPTIONS.map((option) => (
+              {productionTypeOptions.map((option) => (
                 <option key={option} value={option}>
-                  {PRODUCTION_TYPE_LABELS[option]}
+                  {productionTypeLabels[option] ?? option}
                 </option>
               ))}
             </select>
@@ -113,7 +115,7 @@ export function ProductionPage({ snapshot, session }: ProductionPageProps) {
                     <td>{assignment.podLeadName}</td>
                     <td>
                       <Badge tone="success">
-                        {assignment.prodSuffix ? PRODUCTION_TYPE_LABELS[assignment.prodSuffix] : "Ready"}
+                        {getSchemaVariableLabel(snapshot, "PRODUCTION_TYPE", assignment.prodSuffix)}
                       </Badge>
                     </td>
                     <td>{formatDateTime(assignment.productionReadyAt)}</td>

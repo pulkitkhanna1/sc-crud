@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/lib/api";
-import { PERSON_ROLE_LABELS } from "@/lib/constants";
 import type { PersonRole, SessionState, WorkflowActions, WorkflowSnapshot } from "@/lib/types";
+import { getSchemaVariableLabelMap, getSchemaVariableOptions } from "@/lib/schemaVariables";
 import { AdminPage } from "@/pages/AdminPage";
 import { AssignmentsPage } from "@/pages/AssignmentsPage";
 import { BeatsPage } from "@/pages/BeatsPage";
@@ -119,6 +119,9 @@ export default function App() {
     };
   }, [availablePeople, personId, role]);
 
+  const roleOptions = snapshot ? getSchemaVariableOptions(snapshot, "PERSON_ROLE") : [];
+  const roleLabels = snapshot ? getSchemaVariableLabelMap(snapshot, "PERSON_ROLE") : {};
+
   async function mutate<T>(operation: () => Promise<T>, successMessage: string) {
     try {
       setBusy(true);
@@ -158,6 +161,8 @@ export default function App() {
     removePerson: (id) => mutate(() => api.removePerson(id), "Person removed."),
     createShow: (input) => mutate(() => api.createShow(input), "Show added."),
     removeShow: (id) => mutate(() => api.removeShow(id), "Show removed."),
+    createSchemaVariable: (input) => mutate(() => api.createSchemaVariable(input), "Schema variable added."),
+    removeSchemaVariable: (id) => mutate(() => api.removeSchemaVariable(id), "Schema variable removed."),
   };
 
   if (loading) {
@@ -229,9 +234,9 @@ export default function App() {
               }}
             >
               <option value="">Select role</option>
-              {Object.entries(PERSON_ROLE_LABELS).map(([value, label]) => (
+              {roleOptions.map((value) => (
                 <option key={value} value={value}>
-                  {label}
+                  {roleLabels[value] ?? value}
                 </option>
               ))}
             </select>

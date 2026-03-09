@@ -1,15 +1,9 @@
 import { Badge } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
 import { Panel } from "@/components/Panel";
-import {
-  ASSIGNMENT_STATUS_LABELS,
-  BEAT_STATUS_LABELS,
-  IDEA_STATUS_LABELS,
-  toneForAssignmentStatus,
-  toneForBeatStatus,
-  toneForIdeaStatus,
-} from "@/lib/constants";
+import { toneForAssignmentStatus, toneForBeatStatus, toneForIdeaStatus } from "@/lib/constants";
 import { formatDate, formatDateTime, isPastDate } from "@/lib/format";
+import { getSchemaVariableLabel, getSchemaVariableLabelMap, getSchemaVariables } from "@/lib/schemaVariables";
 import type { SessionState, WorkflowSnapshot } from "@/lib/types";
 
 interface OverviewPageProps {
@@ -25,9 +19,14 @@ function countBy<T extends string>(values: T[]) {
 }
 
 export function OverviewPage({ snapshot, session }: OverviewPageProps) {
+  const ideaStatuses = getSchemaVariables(snapshot, "IDEA_STATUS");
+  const beatStatuses = getSchemaVariables(snapshot, "BEAT_STATUS");
+  const assignmentStatuses = getSchemaVariables(snapshot, "ASSIGNMENT_STATUS");
   const ideaCounts = countBy(snapshot.ideas.map((item) => item.status));
   const beatCounts = countBy(snapshot.beats.map((item) => item.status));
   const assignmentCounts = countBy(snapshot.assignments.map((item) => item.status));
+  const beatStatusLabels = getSchemaVariableLabelMap(snapshot, "BEAT_STATUS");
+  const assignmentStatusLabels = getSchemaVariableLabelMap(snapshot, "ASSIGNMENT_STATUS");
 
   const pendingBeatReviews = snapshot.beats
     .filter((beat) => beat.status === "SUBMITTED")
@@ -89,10 +88,10 @@ export function OverviewPage({ snapshot, session }: OverviewPageProps) {
       <div className="split-grid">
         <Panel title="Idea Health" description="Current review state across submitted ideas.">
           <div className="mini-list">
-            {Object.entries(IDEA_STATUS_LABELS).map(([status, label]) => (
-              <div className="mini-row" key={status}>
-                <Badge tone={toneForIdeaStatus(status as keyof typeof IDEA_STATUS_LABELS)}>{label}</Badge>
-                <strong>{ideaCounts[status] ?? 0}</strong>
+            {ideaStatuses.map((status) => (
+              <div className="mini-row" key={status.value}>
+                <Badge tone={toneForIdeaStatus(status.value)}>{status.label}</Badge>
+                <strong>{ideaCounts[status.value] ?? 0}</strong>
               </div>
             ))}
           </div>
@@ -100,10 +99,10 @@ export function OverviewPage({ snapshot, session }: OverviewPageProps) {
 
         <Panel title="Beat Flow" description="How far beat writing has moved through review.">
           <div className="mini-list">
-            {Object.entries(BEAT_STATUS_LABELS).map(([status, label]) => (
-              <div className="mini-row" key={status}>
-                <Badge tone={toneForBeatStatus(status as keyof typeof BEAT_STATUS_LABELS)}>{label}</Badge>
-                <strong>{beatCounts[status] ?? 0}</strong>
+            {beatStatuses.map((status) => (
+              <div className="mini-row" key={status.value}>
+                <Badge tone={toneForBeatStatus(status.value)}>{status.label}</Badge>
+                <strong>{beatCounts[status.value] ?? 0}</strong>
               </div>
             ))}
           </div>
@@ -111,10 +110,10 @@ export function OverviewPage({ snapshot, session }: OverviewPageProps) {
 
         <Panel title="Script Flow" description="Top-line assignment status across the writing workflow.">
           <div className="mini-list">
-            {Object.entries(ASSIGNMENT_STATUS_LABELS).map(([status, label]) => (
-              <div className="mini-row" key={status}>
-                <Badge tone={toneForAssignmentStatus(status as keyof typeof ASSIGNMENT_STATUS_LABELS)}>{label}</Badge>
-                <strong>{assignmentCounts[status] ?? 0}</strong>
+            {assignmentStatuses.map((status) => (
+              <div className="mini-row" key={status.value}>
+                <Badge tone={toneForAssignmentStatus(status.value)}>{status.label}</Badge>
+                <strong>{assignmentCounts[status.value] ?? 0}</strong>
               </div>
             ))}
           </div>
@@ -134,7 +133,7 @@ export function OverviewPage({ snapshot, session }: OverviewPageProps) {
                       <strong>{beat.code}</strong>
                       <p>{beat.title}</p>
                     </div>
-                    <Badge tone={toneForBeatStatus(beat.status)}>{BEAT_STATUS_LABELS[beat.status]}</Badge>
+                    <Badge tone={toneForBeatStatus(beat.status)}>{beatStatusLabels[beat.status] ?? beat.status}</Badge>
                   </div>
                   <p className="meta-line">
                     {beat.ideaCode} · {beat.assignedToName} · Due {formatDate(beat.expectedCompleteDate)}
@@ -161,7 +160,7 @@ export function OverviewPage({ snapshot, session }: OverviewPageProps) {
                       <p>{assignment.angle}</p>
                     </div>
                     <Badge tone={toneForAssignmentStatus(assignment.status)}>
-                      {ASSIGNMENT_STATUS_LABELS[assignment.status]}
+                      {assignmentStatusLabels[assignment.status] ?? assignment.status}
                     </Badge>
                   </div>
                   <p className="meta-line">
@@ -212,7 +211,7 @@ export function OverviewPage({ snapshot, session }: OverviewPageProps) {
                       <strong>{assignment.code}</strong>
                       <p>{assignment.angle}</p>
                     </div>
-                    <Badge tone="success">{assignment.prodSuffix ?? "Ready"}</Badge>
+                    <Badge tone="success">{getSchemaVariableLabel(snapshot, "PRODUCTION_TYPE", assignment.prodSuffix)}</Badge>
                   </div>
                   <p className="meta-line">Ready {formatDateTime(assignment.productionReadyAt)}</p>
                 </article>

@@ -5,18 +5,12 @@ import { EmptyState } from "@/components/EmptyState";
 import { Modal } from "@/components/Modal";
 import { Panel } from "@/components/Panel";
 import {
-  ASSIGNMENT_GRADE_LABELS,
-  ASSIGNMENT_GRADE_OPTIONS,
-  ASSIGNMENT_STATUS_LABELS,
-  ASSIGNMENT_STATUS_OPTIONS,
-  ASSIGNMENT_TYPE_LABELS,
-  PRODUCTION_TYPE_LABELS,
-  PRODUCTION_TYPE_OPTIONS,
   toneForAssignmentGrade,
   toneForAssignmentStatus,
   toneForBeatStatus,
 } from "@/lib/constants";
 import { formatDate, formatDateTime, today } from "@/lib/format";
+import { getSchemaVariableLabelMap, getSchemaVariableOptions } from "@/lib/schemaVariables";
 import type {
   CreateBeatAssignmentInput,
   CreateImprovementAssignmentInput,
@@ -50,6 +44,15 @@ const emptyImprovementForm = (show: string, writerId: string, podLeadId: string)
 export function AssignmentsPage({ snapshot, session, actions, busy }: AssignmentsPageProps) {
   const isManager = session.role !== "WRITER";
   const showNames = useMemo(() => snapshot.shows.map((show) => show.name), [snapshot.shows]);
+  const assignmentStatusOptions = useMemo(() => getSchemaVariableOptions(snapshot, "ASSIGNMENT_STATUS"), [snapshot]);
+  const assignmentStatusLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "ASSIGNMENT_STATUS"), [snapshot]);
+  const assignmentTypeOptions = useMemo(() => getSchemaVariableOptions(snapshot, "ASSIGNMENT_TYPE"), [snapshot]);
+  const assignmentTypeLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "ASSIGNMENT_TYPE"), [snapshot]);
+  const assignmentGradeOptions = useMemo(() => getSchemaVariableOptions(snapshot, "ASSIGNMENT_GRADE"), [snapshot]);
+  const assignmentGradeLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "ASSIGNMENT_GRADE"), [snapshot]);
+  const productionTypeOptions = useMemo(() => getSchemaVariableOptions(snapshot, "PRODUCTION_TYPE"), [snapshot]);
+  const productionTypeLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "PRODUCTION_TYPE"), [snapshot]);
+  const beatStatusLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "BEAT_STATUS"), [snapshot]);
   const writers = useMemo(() => snapshot.people.filter((person) => person.role === "WRITER"), [snapshot.people]);
   const podLeads = useMemo(() => snapshot.people.filter((person) => person.role === "POD_LEAD"), [snapshot.people]);
   const canCreateAssignments = writers.length > 0 && podLeads.length > 0;
@@ -246,7 +249,7 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                       <p>{assignment.angle}</p>
                     </div>
                     <Badge tone={toneForAssignmentStatus(assignment.status)}>
-                      {ASSIGNMENT_STATUS_LABELS[assignment.status]}
+                      {assignmentStatusLabels[assignment.status] ?? assignment.status}
                     </Badge>
                   </div>
                   <p className="meta-line">
@@ -301,7 +304,7 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                         {beat.ideaShow} · {beat.assignedToName}
                       </p>
                     </div>
-                    <Badge tone={toneForBeatStatus(beat.status)}>{beat.status.replaceAll("_", " ")}</Badge>
+                    <Badge tone={toneForBeatStatus(beat.status)}>{beatStatusLabels[beat.status] ?? beat.status}</Badge>
                   </div>
                   <div className="details-grid">
                     {[
@@ -381,7 +384,7 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                       <td>{assignment.writerName}</td>
                       <td>
                         <Badge tone={toneForAssignmentStatus(assignment.status)}>
-                          {ASSIGNMENT_STATUS_LABELS[assignment.status]}
+                          {assignmentStatusLabels[assignment.status] ?? assignment.status}
                         </Badge>
                       </td>
                       <td>{assignment.codeToRework || "—"}</td>
@@ -411,7 +414,7 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                         <div className="inline-meta">
                           <strong>{assignment.code}</strong>
                           <Badge tone="info">{assignment.editCode}</Badge>
-                          <Badge tone="muted">{ASSIGNMENT_TYPE_LABELS[assignment.assignmentType]}</Badge>
+                          <Badge tone="muted">{assignmentTypeLabels[assignment.assignmentType] ?? assignment.assignmentType}</Badge>
                         </div>
                         <h3>{assignment.angle}</h3>
                         <p className="meta-line">
@@ -420,11 +423,11 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                       </div>
                       <div className="badge-cluster">
                         <Badge tone={toneForAssignmentStatus(assignment.status)}>
-                          {ASSIGNMENT_STATUS_LABELS[assignment.status]}
+                          {assignmentStatusLabels[assignment.status] ?? assignment.status}
                         </Badge>
                         {assignment.grade ? (
                           <Badge tone={toneForAssignmentGrade(assignment.grade)}>
-                            {ASSIGNMENT_GRADE_LABELS[assignment.grade]}
+                            {assignmentGradeLabels[assignment.grade] ?? assignment.grade}
                           </Badge>
                         ) : null}
                       </div>
@@ -518,9 +521,9 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
             <span>Status</span>
             <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
               <option value="">All statuses</option>
-              {ASSIGNMENT_STATUS_OPTIONS.map((status) => (
+              {assignmentStatusOptions.map((status) => (
                 <option key={status} value={status}>
-                  {ASSIGNMENT_STATUS_LABELS[status]}
+                  {assignmentStatusLabels[status] ?? status}
                 </option>
               ))}
             </select>
@@ -533,8 +536,11 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
               onChange={(event) => setFilters((current) => ({ ...current, assignmentType: event.target.value }))}
             >
               <option value="">All types</option>
-              <option value="NEW">New beat</option>
-              <option value="IMPROVEMENT">Improvement</option>
+              {assignmentTypeOptions.map((assignmentType) => (
+                <option key={assignmentType} value={assignmentType}>
+                  {assignmentTypeLabels[assignmentType] ?? assignmentType}
+                </option>
+              ))}
             </select>
           </label>
         </div>
@@ -567,14 +573,14 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                     <tr key={assignment.id}>
                       <td>{assignment.code}</td>
                       <td>{assignment.editCode}</td>
-                      <td>{ASSIGNMENT_TYPE_LABELS[assignment.assignmentType]}</td>
+                      <td>{assignmentTypeLabels[assignment.assignmentType] ?? assignment.assignmentType}</td>
                       <td>{assignment.angle}</td>
                       <td>{assignment.writerName}</td>
                       <td>{assignment.podLeadName}</td>
                       <td>{formatDate(assignment.dateDue)}</td>
                       <td>
                         <Badge tone={toneForAssignmentStatus(assignment.status)}>
-                          {ASSIGNMENT_STATUS_LABELS[assignment.status]}
+                          {assignmentStatusLabels[assignment.status] ?? assignment.status}
                         </Badge>
                       </td>
                       <td>
@@ -907,13 +913,13 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                 onChange={(event) =>
                   setReviewForm((current) => ({
                     ...current,
-                    grade: event.target.value as AssignmentGrade,
+                    grade: event.target.value,
                   }))
                 }
               >
-                {ASSIGNMENT_GRADE_OPTIONS.map((grade) => (
+                {assignmentGradeOptions.map((grade) => (
                   <option key={grade} value={grade}>
-                    {ASSIGNMENT_GRADE_LABELS[grade]}
+                    {assignmentGradeLabels[grade] ?? grade}
                   </option>
                 ))}
               </select>
@@ -972,9 +978,9 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                   })
                 }
               >
-                {PRODUCTION_TYPE_OPTIONS.map((option) => (
+                {productionTypeOptions.map((option) => (
                   <option key={option} value={option}>
-                    {PRODUCTION_TYPE_LABELS[option]}
+                    {productionTypeLabels[option] ?? option}
                   </option>
                 ))}
               </select>

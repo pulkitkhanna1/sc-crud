@@ -4,15 +4,9 @@ import { Badge } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
 import { Modal } from "@/components/Modal";
 import { Panel } from "@/components/Panel";
-import {
-  IDEA_RANK_LABELS,
-  IDEA_RANK_OPTIONS,
-  IDEA_STATUS_LABELS,
-  IDEA_STATUS_OPTIONS,
-  toneForIdeaRank,
-  toneForIdeaStatus,
-} from "@/lib/constants";
+import { toneForIdeaRank, toneForIdeaStatus } from "@/lib/constants";
 import { formatDate, today } from "@/lib/format";
+import { getSchemaVariableLabelMap, getSchemaVariableOptions } from "@/lib/schemaVariables";
 import type {
   CreateBeatInput,
   CreateIdeaInput,
@@ -43,7 +37,7 @@ const emptyIdeaForm = (submittedById: string): CreateIdeaInput => ({
   note: "",
 });
 
-function createBeatDraft(idea: Idea, assignedToId: string): CreateBeatInput {
+function createBeatDraft(idea: Idea, assignedRole: string, assignedToId: string): CreateBeatInput {
   return {
     ideaId: idea.id,
     title: "",
@@ -56,7 +50,7 @@ function createBeatDraft(idea: Idea, assignedToId: string): CreateBeatInput {
     note: idea.note,
     docLink: "",
     assignedToId,
-    assignedRole: "WRITER",
+    assignedRole,
     requestRaisedOn: today(),
     expectedStartDate: today(),
     expectedCompleteDate: today(),
@@ -65,8 +59,17 @@ function createBeatDraft(idea: Idea, assignedToId: string): CreateBeatInput {
 
 export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) {
   const isManager = session.role !== "WRITER";
-  const assignablePeople = snapshot.people.filter((person) => person.role === "WRITER" || person.role === "POD_LEAD");
   const showNames = useMemo(() => snapshot.shows.map((show) => show.name), [snapshot.shows]);
+  const ideaStatusOptions = useMemo(() => getSchemaVariableOptions(snapshot, "IDEA_STATUS"), [snapshot]);
+  const ideaStatusLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "IDEA_STATUS"), [snapshot]);
+  const ideaRankOptions = useMemo(() => getSchemaVariableOptions(snapshot, "IDEA_RANK"), [snapshot]);
+  const ideaRankLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "IDEA_RANK"), [snapshot]);
+  const beatAssigneeRoleOptions = useMemo(() => getSchemaVariableOptions(snapshot, "BEAT_ASSIGNEE_ROLE"), [snapshot]);
+  const beatAssigneeRoleLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "BEAT_ASSIGNEE_ROLE"), [snapshot]);
+  const assignablePeople = useMemo(
+    () => snapshot.people.filter((person) => beatAssigneeRoleOptions.includes(person.role)),
+    [beatAssigneeRoleOptions, snapshot.people],
+  );
   const [ideaForm, setIdeaForm] = useState<CreateIdeaInput>(() => emptyIdeaForm(session.personId));
   const [filters, setFilters] = useState({
     show: "",
@@ -86,6 +89,13 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
   }, [session.personId, showNames]);
 
   const selectedIdea = snapshot.ideas.find((idea) => idea.id === selectedIdeaId) ?? null;
+  const availableBeatAssignees = useMemo(() => {
+    if (!beatForm) {
+      return [];
+    }
+
+    return assignablePeople.filter((person) => person.role === beatForm.assignedRole);
+  }, [assignablePeople, beatForm]);
 
   const filteredIdeas = useMemo(() => {
     return [...snapshot.ideas]
@@ -115,8 +125,14 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
   }
 
   function openBeatModal(idea: Idea) {
+    const assignedRole = beatAssigneeRoleOptions[0] ?? "WRITER";
+    const assignedToId =
+      assignablePeople.find((person) => person.role === assignedRole)?.id ??
+      assignablePeople[0]?.id ??
+      "";
+
     setSelectedIdeaId(idea.id);
-    setBeatForm(createBeatDraft(idea, assignablePeople[0]?.id ?? ""));
+    setBeatForm(createBeatDraft(idea, assignedRole, assignedToId));
   }
 
   return (
@@ -228,9 +244,9 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
                 onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
               >
                 <option value="">All statuses</option>
-                {IDEA_STATUS_OPTIONS.map((status) => (
+                {ideaStatusOptions.map((status) => (
                   <option key={status} value={status}>
-                    {IDEA_STATUS_LABELS[status]}
+                    {ideaStatusLabels[status] ?? status}
                   </option>
                 ))}
               </select>
@@ -240,9 +256,9 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
               <span>Rank</span>
               <select value={filters.rank} onChange={(event) => setFilters((current) => ({ ...current, rank: event.target.value }))}>
                 <option value="">All ranks</option>
-                {IDEA_RANK_OPTIONS.map((rank) => (
+                {ideaRankOptions.map((rank) => (
                   <option key={rank} value={rank}>
-                    {IDEA_RANK_LABELS[rank]}
+                    {ideaRankLabels[rank] ?? rank}
                   </option>
                 ))}
               </select>
@@ -293,8 +309,8 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
                       </p>
                     </div>
                     <div className="badge-cluster">
-                      <Badge tone={toneForIdeaStatus(idea.status)}>{IDEA_STATUS_LABELS[idea.status]}</Badge>
-                      <Badge tone={toneForIdeaRank(idea.rank)}>{IDEA_RANK_LABELS[idea.rank]}</Badge>
+                      <Badge tone={toneForIdeaStatus(idea.status)}>{ideaStatusLabels[idea.status] ?? idea.status}</Badge>
+                      <Badge tone={toneForIdeaRank(idea.rank)}>{ideaRankLabels[idea.rank] ?? idea.rank}</Badge>
                     </div>
                   </div>
 
@@ -329,9 +345,9 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
                             })
                           }
                         >
-                          {IDEA_RANK_OPTIONS.map((rank) => (
+                          {ideaRankOptions.map((rank) => (
                             <option key={rank} value={rank}>
-                              {IDEA_RANK_LABELS[rank]}
+                              {ideaRankLabels[rank] ?? rank}
                             </option>
                           ))}
                         </select>
@@ -349,9 +365,9 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
                             })
                           }
                         >
-                          {IDEA_STATUS_OPTIONS.map((status) => (
+                          {ideaStatusOptions.map((status) => (
                             <option key={status} value={status}>
-                              {IDEA_STATUS_LABELS[status]}
+                              {ideaStatusLabels[status] ?? status}
                             </option>
                           ))}
                         </select>
@@ -386,7 +402,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
                               <Badge tone={toneForIdeaStatus(idea.status)}>{beat.assignedToName}</Badge>
                             </div>
                             <p className="meta-line">
-                              {beat.assignedRole} · {formatDate(beat.expectedCompleteDate)}
+                              {beatAssigneeRoleLabels[beat.assignedRole] ?? beat.assignedRole} · {formatDate(beat.expectedCompleteDate)}
                             </p>
                           </div>
                         ))}
@@ -451,7 +467,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
                   }
                 >
                   <option value="">Select a person</option>
-                  {assignablePeople.map((person) => (
+                  {availableBeatAssignees.map((person) => (
                     <option key={person.id} value={person.id}>
                       {person.name}
                     </option>
@@ -464,18 +480,27 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
                 <select
                   value={beatForm.assignedRole}
                   onChange={(event) =>
-                    setBeatForm((current) =>
-                      current
-                        ? {
-                            ...current,
-                            assignedRole: event.target.value as CreateBeatInput["assignedRole"],
-                          }
-                        : current,
-                    )
+                    setBeatForm((current) => {
+                      if (!current) {
+                        return current;
+                      }
+
+                      const assignedRole = event.target.value as CreateBeatInput["assignedRole"];
+                      const assignedToId = assignablePeople.find((person) => person.role === assignedRole)?.id ?? "";
+
+                      return {
+                        ...current,
+                        assignedRole,
+                        assignedToId,
+                      };
+                    })
                   }
                 >
-                  <option value="WRITER">Writer</option>
-                  <option value="POD_LEAD">POD Lead</option>
+                  {beatAssigneeRoleOptions.map((role) => (
+                    <option key={role} value={role}>
+                      {beatAssigneeRoleLabels[role] ?? role}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>

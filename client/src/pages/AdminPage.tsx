@@ -3,18 +3,19 @@ import { useMemo, useState } from "react";
 import { Badge } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
 import { Panel } from "@/components/Panel";
-import {
-  ASSIGNMENT_GRADE_LABELS,
-  ASSIGNMENT_STATUS_LABELS,
-  ASSIGNMENT_TYPE_LABELS,
-  BEAT_STATUS_LABELS,
-  IDEA_RANK_LABELS,
-  IDEA_STATUS_LABELS,
-  PERSON_ROLE_LABELS,
-  PRODUCTION_TYPE_LABELS,
-} from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
-import type { CreatePersonInput, PersonRole, WorkflowActions, WorkflowSnapshot } from "@/lib/types";
+import {
+  SCHEMA_VARIABLE_CATEGORY_META,
+  getSchemaVariableLabelMap,
+  getSchemaVariables,
+} from "@/lib/schemaVariables";
+import type {
+  CreatePersonInput,
+  CreateSchemaVariableInput,
+  SchemaVariableCategory,
+  WorkflowActions,
+  WorkflowSnapshot,
+} from "@/lib/types";
 
 interface AdminPageProps {
   snapshot: WorkflowSnapshot;
@@ -29,48 +30,10 @@ const emptyPersonForm = (): CreatePersonInput => ({
   role: "WRITER",
 });
 
-const schemaGroups = [
-  {
-    title: "People roles",
-    description: "Roles available for session switching and team setup.",
-    entries: Object.entries(PERSON_ROLE_LABELS),
-  },
-  {
-    title: "Idea statuses",
-    description: "Review outcome stored on ideas.",
-    entries: Object.entries(IDEA_STATUS_LABELS),
-  },
-  {
-    title: "Idea ranks",
-    description: "Prioritization values used after review.",
-    entries: Object.entries(IDEA_RANK_LABELS),
-  },
-  {
-    title: "Beat statuses",
-    description: "Stage progression for beat development.",
-    entries: Object.entries(BEAT_STATUS_LABELS),
-  },
-  {
-    title: "Assignment types",
-    description: "New work versus improvement requests.",
-    entries: Object.entries(ASSIGNMENT_TYPE_LABELS),
-  },
-  {
-    title: "Assignment statuses",
-    description: "Writer and review workflow states.",
-    entries: Object.entries(ASSIGNMENT_STATUS_LABELS),
-  },
-  {
-    title: "Assignment grades",
-    description: "Review outcomes after script submission.",
-    entries: Object.entries(ASSIGNMENT_GRADE_LABELS),
-  },
-  {
-    title: "Production types",
-    description: "Downstream production suffixes.",
-    entries: Object.entries(PRODUCTION_TYPE_LABELS),
-  },
-];
+const emptySchemaVariableForm = (): Pick<CreateSchemaVariableInput, "value" | "label"> => ({
+  value: "",
+  label: "",
+});
 
 function formatActionLabel(value: string) {
   return value
@@ -91,15 +54,21 @@ function formatLogPayload(payload: unknown) {
 export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
   const [showName, setShowName] = useState("");
   const [personForm, setPersonForm] = useState<CreatePersonInput>(emptyPersonForm);
+  const [schemaVariableForms, setSchemaVariableForms] = useState<
+    Record<string, Pick<CreateSchemaVariableInput, "value" | "label">>
+  >({});
+
+  const roleVariables = useMemo(() => getSchemaVariables(snapshot, "PERSON_ROLE"), [snapshot]);
+  const roleLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "PERSON_ROLE"), [snapshot]);
 
   const peopleByRole = useMemo(
     () =>
-      (Object.keys(PERSON_ROLE_LABELS) as PersonRole[]).map((role) => ({
-        role,
-        label: PERSON_ROLE_LABELS[role],
-        people: snapshot.people.filter((person) => person.role === role),
+      roleVariables.map((role) => ({
+        role: role.value,
+        label: role.label,
+        people: snapshot.people.filter((person) => person.role === role.value),
       })),
-    [snapshot.people],
+    [roleVariables, snapshot.people],
   );
 
   const linkedPersonIds = useMemo(() => {
@@ -138,6 +107,20 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
     return names;
   }, [snapshot.assignments, snapshot.ideas]);
 
+  function getSchemaVariableForm(category: SchemaVariableCategory) {
+    return schemaVariableForms[category] ?? emptySchemaVariableForm();
+  }
+
+  function updateSchemaVariableForm(category: SchemaVariableCategory, next: Partial<Pick<CreateSchemaVariableInput, "value" | "label">>) {
+    setSchemaVariableForms((current) => ({
+      ...current,
+      [category]: {
+        ...getSchemaVariableForm(category),
+        ...next,
+      },
+    }));
+  }
+
   async function handleCreateShow(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -145,7 +128,7 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
       await actions.createShow({ name: showName });
       setShowName("");
     } catch {
-      // Toast is handled globally in App.
+      // Toast handled in App.
     }
   }
 
@@ -156,7 +139,23 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
       await actions.createPerson(personForm);
       setPersonForm(emptyPersonForm());
     } catch {
-      // Toast is handled globally in App.
+      // Toast handled in App.
+    }
+  }
+
+  async function handleCreateSchemaVariable(event: React.FormEvent<HTMLFormElement>, category: SchemaVariableCategory) {
+    event.preventDefault();
+
+    try {
+      const form = getSchemaVariableForm(category);
+      await actions.createSchemaVariable({
+        category,
+        value: form.value,
+        label: form.label,
+      });
+      updateSchemaVariableForm(category, emptySchemaVariableForm());
+    } catch {
+      // Toast handled in App.
     }
   }
 
@@ -164,7 +163,7 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
     try {
       await actions.removeShow(id);
     } catch {
-      // Toast is handled globally in App.
+      // Toast handled in App.
     }
   }
 
@@ -172,7 +171,15 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
     try {
       await actions.removePerson(id);
     } catch {
-      // Toast is handled globally in App.
+      // Toast handled in App.
+    }
+  }
+
+  async function handleRemoveSchemaVariable(id: string) {
+    try {
+      await actions.removeSchemaVariable(id);
+    } catch {
+      // Toast handled in App.
     }
   }
 
@@ -190,9 +197,9 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
           <p>available session identities</p>
         </div>
         <div className="metric-card">
-          <span>Writers</span>
-          <strong>{snapshot.people.filter((person) => person.role === "WRITER").length}</strong>
-          <p>eligible for assignments</p>
+          <span>Schema variables</span>
+          <strong>{snapshot.schemaVariables.length}</strong>
+          <p>runtime workflow options</p>
         </div>
         <div className="metric-card">
           <span>Admin logs</span>
@@ -201,10 +208,10 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
         </div>
       </div>
 
-      <Panel title="Admin workspace" description="Add shows, manage team members, and review every stored admin input below.">
+      <Panel title="Admin workspace" description="Manage shows, team members, and runtime workflow variables from one place.">
         <div className="callout">
-          <strong>Open admin access</strong>
-          <p>The Admin tab is now unlocked by default. All show and team edits are persisted and logged in the panel at the bottom.</p>
+          <strong>Dynamic config is live</strong>
+          <p>Shows, team members, and schema variables are now database-backed. Core defaults stay protected, and all admin inputs are logged below.</p>
         </div>
       </Panel>
 
@@ -286,13 +293,13 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
                 onChange={(event) =>
                   setPersonForm((current) => ({
                     ...current,
-                    role: event.target.value as PersonRole,
+                    role: event.target.value,
                   }))
                 }
               >
-                {(Object.keys(PERSON_ROLE_LABELS) as PersonRole[]).map((role) => (
-                  <option key={role} value={role}>
-                    {PERSON_ROLE_LABELS[role]}
+                {roleVariables.map((role) => (
+                  <option key={role.id} value={role.value}>
+                    {role.label}
                   </option>
                 ))}
               </select>
@@ -325,7 +332,9 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
                       <div className="person-row" key={person.id}>
                         <div>
                           <strong>{person.name}</strong>
-                          <p className="muted-copy">{isLinked ? "Already linked to workflow history" : "Unused and safe to remove"}</p>
+                          <p className="muted-copy">
+                            {isLinked ? "Already linked to workflow history" : "Unused and safe to remove"} · {roleLabels[person.role] ?? person.role}
+                          </p>
                         </div>
                         <div className="button-row">
                           <Badge tone={isLinked ? "warning" : "success"}>{isLinked ? "In use" : "Unused"}</Badge>
@@ -348,31 +357,83 @@ export function AdminPage({ snapshot, actions, busy }: AdminPageProps) {
         </div>
       </Panel>
 
-      <Panel
-        title="Schema variables"
-        description="These are the fixed enum-backed workflow values from the current schema. They are visible here for reference but not editable from the UI."
-      >
+      <Panel title="Schema variables" description="Add and remove runtime workflow values for roles, statuses, types, and grades.">
         <div className="split-grid">
-          {schemaGroups.map((group) => (
-            <div className="empty-state" key={group.title}>
-              <h3>{group.title}</h3>
-              <p>{group.description}</p>
-              <div className="badge-cluster">
-                {group.entries.map(([value, label]) => (
-                  <div className="mini-row" key={value}>
-                    <Badge tone="info">{value}</Badge>
-                    <span>{label}</span>
+          {SCHEMA_VARIABLE_CATEGORY_META.map((group) => {
+            const variables = getSchemaVariables(snapshot, group.category);
+            const form = getSchemaVariableForm(group.category);
+
+            return (
+              <div className="panel" key={group.category}>
+                <div className="panel-header">
+                  <div>
+                    <h2>{group.title}</h2>
+                    <p>{group.description}</p>
                   </div>
-                ))}
+                </div>
+
+                <form className="form-stack" onSubmit={(event) => void handleCreateSchemaVariable(event, group.category)}>
+                  <label className="field">
+                    <span>Stored value</span>
+                    <input
+                      placeholder="UPPER_CASE_VALUE"
+                      value={form.value}
+                      onChange={(event) => updateSchemaVariableForm(group.category, { value: event.target.value })}
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Label</span>
+                    <input
+                      placeholder="Readable label"
+                      value={form.label}
+                      onChange={(event) => updateSchemaVariableForm(group.category, { label: event.target.value })}
+                    />
+                  </label>
+
+                  <div className="button-row">
+                    <button className="primary-button" disabled={busy} type="submit">
+                      Add variable
+                    </button>
+                  </div>
+                </form>
+
+                <div className="subsection">
+                  {variables.length === 0 ? (
+                    <EmptyState title="No variables yet" description="Add a value for this category from the form above." />
+                  ) : (
+                    <div className="stack-list">
+                      {variables.map((variable) => (
+                        <div className="person-row" key={variable.id}>
+                          <div>
+                            <strong>{variable.label}</strong>
+                            <p className="muted-copy">{variable.value}</p>
+                          </div>
+                          <div className="button-row">
+                            {variable.isCore ? <Badge tone="info">Core</Badge> : null}
+                            <button
+                              className="ghost-button"
+                              disabled={busy || variable.isCore}
+                              type="button"
+                              onClick={() => void handleRemoveSchemaVariable(variable.id)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Panel>
 
       <Panel title="Admin logs" description="Every stored admin input is listed here, newest first.">
         {snapshot.adminLogs.length === 0 ? (
-          <EmptyState title="No admin logs yet" description="Add a show or a team member to start building the admin activity log." />
+          <EmptyState title="No admin logs yet" description="Add a show, a team member, or a schema variable to start building the admin activity log." />
         ) : (
           <div className="stack-list">
             {snapshot.adminLogs.map((log) => (

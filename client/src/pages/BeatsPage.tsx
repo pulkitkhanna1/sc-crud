@@ -4,8 +4,9 @@ import { Badge } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
 import { Modal } from "@/components/Modal";
 import { Panel } from "@/components/Panel";
-import { BEAT_STATUS_LABELS, BEAT_STATUS_OPTIONS, toneForBeatStatus } from "@/lib/constants";
+import { toneForBeatStatus } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
+import { getSchemaVariableLabelMap, getSchemaVariableOptions } from "@/lib/schemaVariables";
 import type { ReviewBeatInput, SessionState, WorkflowActions, WorkflowSnapshot } from "@/lib/types";
 
 interface BeatsPageProps {
@@ -16,6 +17,14 @@ interface BeatsPageProps {
 }
 
 export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) {
+  const beatStatusOptions = useMemo(() => getSchemaVariableOptions(snapshot, "BEAT_STATUS"), [snapshot]);
+  const beatStatusLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "BEAT_STATUS"), [snapshot]);
+  const beatAssigneeRoleOptions = useMemo(() => getSchemaVariableOptions(snapshot, "BEAT_ASSIGNEE_ROLE"), [snapshot]);
+  const beatAssigneeRoleLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "BEAT_ASSIGNEE_ROLE"), [snapshot]);
+  const reviewDecisionOptions = useMemo(
+    () => beatStatusOptions.filter((status) => status === "APPROVED_FOR_SCRIPT_WRITING" || status === "TO_BE_REDONE"),
+    [beatStatusOptions],
+  );
   const [filters, setFilters] = useState({
     status: "",
     assignedToId: "",
@@ -29,6 +38,10 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
     reviewedById: session.personId,
     notes: "",
   });
+  const assignablePeople = useMemo(
+    () => snapshot.people.filter((person) => beatAssigneeRoleOptions.includes(person.role)),
+    [beatAssigneeRoleOptions, snapshot.people],
+  );
 
   const visibleBeats = useMemo(() => {
     return [...snapshot.beats]
@@ -71,9 +84,9 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
             <span>Status</span>
             <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
               <option value="">All statuses</option>
-              {BEAT_STATUS_OPTIONS.map((status) => (
+              {beatStatusOptions.map((status) => (
                 <option key={status} value={status}>
-                  {BEAT_STATUS_LABELS[status]}
+                  {beatStatusLabels[status] ?? status}
                 </option>
               ))}
             </select>
@@ -86,13 +99,11 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
               onChange={(event) => setFilters((current) => ({ ...current, assignedToId: event.target.value }))}
             >
               <option value="">Everyone</option>
-              {snapshot.people
-                .filter((person) => person.role === "WRITER" || person.role === "POD_LEAD")
-                .map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name}
-                  </option>
-                ))}
+              {assignablePeople.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -111,9 +122,9 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
       </Panel>
 
       <div className="metrics-grid">
-        {BEAT_STATUS_OPTIONS.map((status) => (
+        {beatStatusOptions.map((status) => (
           <div className="metric-card" key={status}>
-            <span>{BEAT_STATUS_LABELS[status]}</span>
+            <span>{beatStatusLabels[status] ?? status}</span>
             <strong>{snapshot.beats.filter((beat) => beat.status === status).length}</strong>
             <p>beats</p>
           </div>
@@ -141,10 +152,11 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
                       </div>
                       <h3>{beat.title}</h3>
                       <p className="meta-line">
-                        {beat.assignedToName} · {beat.assignedRole} · Due {formatDate(beat.expectedCompleteDate)}
+                        {beat.assignedToName} · {beatAssigneeRoleLabels[beat.assignedRole] ?? beat.assignedRole} · Due{" "}
+                        {formatDate(beat.expectedCompleteDate)}
                       </p>
                     </div>
-                    <Badge tone={toneForBeatStatus(beat.status)}>{BEAT_STATUS_LABELS[beat.status]}</Badge>
+                    <Badge tone={toneForBeatStatus(beat.status)}>{beatStatusLabels[beat.status] ?? beat.status}</Badge>
                   </div>
 
                   <div className="details-grid">
@@ -270,8 +282,11 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
                   }))
                 }
               >
-                <option value="APPROVED_FOR_SCRIPT_WRITING">Approve for script writing</option>
-                <option value="TO_BE_REDONE">Send back for redo</option>
+                {reviewDecisionOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {beatStatusLabels[status] ?? status}
+                  </option>
+                ))}
               </select>
             </label>
 

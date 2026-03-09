@@ -6,10 +6,12 @@ import {
   createIdea,
   createImprovementAssignment,
   createPerson,
+  createSchemaVariable,
   createShow,
   getWorkflowSnapshot,
   markAssignmentReady,
   removePerson,
+  removeSchemaVariable,
   removeShow,
   reviewAssignment,
   reviewBeat,
@@ -150,6 +152,22 @@ router.delete(
   "/admin/shows/:id",
   route(async (req, res) => {
     await removeShow(req.params.id);
+    res.status(204).end();
+  }),
+);
+
+router.post(
+  "/admin/schema-variables",
+  route(async (req, res) => {
+    const variable = await createSchemaVariable(req.body);
+    res.status(201).json(variable);
+  }),
+);
+
+router.delete(
+  "/admin/schema-variables/:id",
+  route(async (req, res) => {
+    await removeSchemaVariable(req.params.id);
     res.status(204).end();
   }),
 );

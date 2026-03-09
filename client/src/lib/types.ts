@@ -1,16 +1,22 @@
-export type PersonRole = "WRITER" | "POD_LEAD" | "BUSINESS";
-export type IdeaStatus = "NOT_REVIEWED" | "ACCEPTED" | "REJECTED";
-export type IdeaRank = "UNRANKED" | "HIGH_CONVICTION" | "BET" | "REJECT";
-export type BeatAssigneeRole = "WRITER" | "POD_LEAD";
-export type BeatStatus = "ASSIGNED" | "SUBMITTED" | "APPROVED_FOR_SCRIPT_WRITING" | "TO_BE_REDONE";
-export type AssignmentType = "NEW" | "IMPROVEMENT";
-export type AssignmentStatus =
-  | "ASSIGNED_TO_WRITER"
-  | "COMPLETED_BY_WRITER"
-  | "READY_FOR_PRODUCTION"
-  | "REWRITE_REQUIRED";
-export type AssignmentGrade = "STRONG_OUTPUT" | "MINOR_FLAWS" | "MAJOR_FLAWS" | "REDO";
-export type ProductionType = "GA" | "GU";
+export type PersonRole = string;
+export type IdeaStatus = string;
+export type IdeaRank = string;
+export type BeatAssigneeRole = string;
+export type BeatStatus = string;
+export type AssignmentType = string;
+export type AssignmentStatus = string;
+export type AssignmentGrade = string;
+export type ProductionType = string;
+export type SchemaVariableCategory =
+  | "PERSON_ROLE"
+  | "IDEA_STATUS"
+  | "IDEA_RANK"
+  | "BEAT_ASSIGNEE_ROLE"
+  | "BEAT_STATUS"
+  | "ASSIGNMENT_TYPE"
+  | "ASSIGNMENT_STATUS"
+  | "ASSIGNMENT_GRADE"
+  | "PRODUCTION_TYPE";
 
 export interface Person {
   id: string;
@@ -21,6 +27,15 @@ export interface Person {
 export interface Show {
   id: string;
   name: string;
+}
+
+export interface SchemaVariable {
+  id: string;
+  category: SchemaVariableCategory;
+  value: string;
+  label: string;
+  sortOrder: number;
+  isCore: boolean;
 }
 
 export interface AdminLog {
@@ -121,6 +136,7 @@ export interface Assignment {
 
 export interface WorkflowSnapshot {
   shows: Show[];
+  schemaVariables: SchemaVariable[];
   adminLogs: AdminLog[];
   people: Person[];
   ideas: Idea[];
@@ -176,7 +192,7 @@ export interface SubmitBeatInput {
 }
 
 export interface ReviewBeatInput {
-  decision: Extract<BeatStatus, "APPROVED_FOR_SCRIPT_WRITING" | "TO_BE_REDONE">;
+  decision: BeatStatus;
   reviewedById: string;
   notes?: string;
 }
@@ -192,7 +208,7 @@ export interface CreateBeatAssignmentInput {
 }
 
 export interface CreateImprovementAssignmentInput {
-  assignmentType?: "IMPROVEMENT";
+  assignmentType?: AssignmentType;
   show: string;
   angle: string;
   writerId: string;
@@ -228,6 +244,12 @@ export interface CreateShowInput {
   name: string;
 }
 
+export interface CreateSchemaVariableInput {
+  category: SchemaVariableCategory;
+  value: string;
+  label: string;
+}
+
 export interface ReviewAssignmentResult {
   createdRedoCode: string | null;
 }
@@ -248,4 +270,6 @@ export interface WorkflowActions {
   removePerson(id: string): Promise<void>;
   createShow(input: CreateShowInput): Promise<void>;
   removeShow(id: string): Promise<void>;
+  createSchemaVariable(input: CreateSchemaVariableInput): Promise<void>;
+  removeSchemaVariable(id: string): Promise<void>;
 }

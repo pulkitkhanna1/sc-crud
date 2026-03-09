@@ -1,27 +1,100 @@
 import type { Prisma } from "@prisma/client";
-import {
-  AssignmentGrade,
-  AssignmentStatus,
-  AssignmentType,
-  BeatAssigneeRole,
-  BeatStatus,
-  IdeaRank,
-  IdeaStatus,
-  PersonRole,
-  ProductionType,
-} from "@prisma/client";
 
 import { prisma } from "./db";
-import { AppError, optionalString, parseDateInput, parseEnumValue, requireString } from "./validation";
+import { AppError, optionalString, parseDateInput, requireString } from "./validation";
 
-const PERSON_ROLE_VALUES = Object.values(PersonRole);
-const IDEA_STATUS_VALUES = Object.values(IdeaStatus);
-const IDEA_RANK_VALUES = Object.values(IdeaRank);
-const BEAT_ASSIGNEE_ROLE_VALUES = Object.values(BeatAssigneeRole);
-const BEAT_STATUS_VALUES = Object.values(BeatStatus);
-const ASSIGNMENT_TYPE_VALUES = Object.values(AssignmentType);
-const ASSIGNMENT_GRADE_VALUES = Object.values(AssignmentGrade);
-const PRODUCTION_TYPE_VALUES = Object.values(ProductionType);
+const VARIABLE_CATEGORIES = {
+  PERSON_ROLE: "PERSON_ROLE",
+  IDEA_STATUS: "IDEA_STATUS",
+  IDEA_RANK: "IDEA_RANK",
+  BEAT_ASSIGNEE_ROLE: "BEAT_ASSIGNEE_ROLE",
+  BEAT_STATUS: "BEAT_STATUS",
+  ASSIGNMENT_TYPE: "ASSIGNMENT_TYPE",
+  ASSIGNMENT_STATUS: "ASSIGNMENT_STATUS",
+  ASSIGNMENT_GRADE: "ASSIGNMENT_GRADE",
+  PRODUCTION_TYPE: "PRODUCTION_TYPE",
+} as const;
+
+const DEFAULT_SCHEMA_VARIABLES = [
+  { category: VARIABLE_CATEGORIES.PERSON_ROLE, value: "WRITER", label: "Writer", sortOrder: 10, isCore: true },
+  { category: VARIABLE_CATEGORIES.PERSON_ROLE, value: "POD_LEAD", label: "POD Lead", sortOrder: 20, isCore: true },
+  { category: VARIABLE_CATEGORIES.PERSON_ROLE, value: "BUSINESS", label: "Business", sortOrder: 30, isCore: true },
+  { category: VARIABLE_CATEGORIES.IDEA_STATUS, value: "NOT_REVIEWED", label: "Not Reviewed", sortOrder: 10, isCore: true },
+  { category: VARIABLE_CATEGORIES.IDEA_STATUS, value: "ACCEPTED", label: "Accepted", sortOrder: 20, isCore: true },
+  { category: VARIABLE_CATEGORIES.IDEA_STATUS, value: "REJECTED", label: "Rejected", sortOrder: 30, isCore: true },
+  { category: VARIABLE_CATEGORIES.IDEA_RANK, value: "UNRANKED", label: "Unranked", sortOrder: 10, isCore: true },
+  { category: VARIABLE_CATEGORIES.IDEA_RANK, value: "HIGH_CONVICTION", label: "High Conviction", sortOrder: 20, isCore: true },
+  { category: VARIABLE_CATEGORIES.IDEA_RANK, value: "BET", label: "Bet", sortOrder: 30, isCore: true },
+  { category: VARIABLE_CATEGORIES.IDEA_RANK, value: "REJECT", label: "Reject", sortOrder: 40, isCore: true },
+  { category: VARIABLE_CATEGORIES.BEAT_ASSIGNEE_ROLE, value: "WRITER", label: "Writer", sortOrder: 10, isCore: true },
+  { category: VARIABLE_CATEGORIES.BEAT_ASSIGNEE_ROLE, value: "POD_LEAD", label: "POD Lead", sortOrder: 20, isCore: true },
+  { category: VARIABLE_CATEGORIES.BEAT_STATUS, value: "ASSIGNED", label: "Assigned", sortOrder: 10, isCore: true },
+  { category: VARIABLE_CATEGORIES.BEAT_STATUS, value: "SUBMITTED", label: "Submitted", sortOrder: 20, isCore: true },
+  {
+    category: VARIABLE_CATEGORIES.BEAT_STATUS,
+    value: "APPROVED_FOR_SCRIPT_WRITING",
+    label: "Approved for Script Writing",
+    sortOrder: 30,
+    isCore: true,
+  },
+  { category: VARIABLE_CATEGORIES.BEAT_STATUS, value: "TO_BE_REDONE", label: "To Be Redone", sortOrder: 40, isCore: true },
+  { category: VARIABLE_CATEGORIES.ASSIGNMENT_TYPE, value: "NEW", label: "New Beat", sortOrder: 10, isCore: true },
+  { category: VARIABLE_CATEGORIES.ASSIGNMENT_TYPE, value: "IMPROVEMENT", label: "Improvement", sortOrder: 20, isCore: true },
+  {
+    category: VARIABLE_CATEGORIES.ASSIGNMENT_STATUS,
+    value: "ASSIGNED_TO_WRITER",
+    label: "Assigned to Writer",
+    sortOrder: 10,
+    isCore: true,
+  },
+  {
+    category: VARIABLE_CATEGORIES.ASSIGNMENT_STATUS,
+    value: "COMPLETED_BY_WRITER",
+    label: "Completed by Writer",
+    sortOrder: 20,
+    isCore: true,
+  },
+  {
+    category: VARIABLE_CATEGORIES.ASSIGNMENT_STATUS,
+    value: "READY_FOR_PRODUCTION",
+    label: "Ready for Production",
+    sortOrder: 30,
+    isCore: true,
+  },
+  {
+    category: VARIABLE_CATEGORIES.ASSIGNMENT_STATUS,
+    value: "REWRITE_REQUIRED",
+    label: "Rewrite Required",
+    sortOrder: 40,
+    isCore: true,
+  },
+  {
+    category: VARIABLE_CATEGORIES.ASSIGNMENT_GRADE,
+    value: "STRONG_OUTPUT",
+    label: "Strong Output",
+    sortOrder: 10,
+    isCore: true,
+  },
+  {
+    category: VARIABLE_CATEGORIES.ASSIGNMENT_GRADE,
+    value: "MINOR_FLAWS",
+    label: "Minor Flaws",
+    sortOrder: 20,
+    isCore: true,
+  },
+  {
+    category: VARIABLE_CATEGORIES.ASSIGNMENT_GRADE,
+    value: "MAJOR_FLAWS",
+    label: "Major Flaws",
+    sortOrder: 30,
+    isCore: true,
+  },
+  { category: VARIABLE_CATEGORIES.ASSIGNMENT_GRADE, value: "REDO", label: "Redo", sortOrder: 40, isCore: true },
+  { category: VARIABLE_CATEGORIES.PRODUCTION_TYPE, value: "GA", label: "Q1 + TN", sortOrder: 10, isCore: true },
+  { category: VARIABLE_CATEGORIES.PRODUCTION_TYPE, value: "GU", label: "Full Gen AI", sortOrder: 20, isCore: true },
+] as const;
+const VARIABLE_CATEGORY_VALUES = Object.values(VARIABLE_CATEGORIES);
+
 const DEFAULT_SHOWS = ["MVS", "FLBM", "WBT"] as const;
 const DEFAULT_SHOW_SET = new Set<string>(DEFAULT_SHOWS);
 
@@ -49,6 +122,24 @@ function serializeShow(show: {
   return {
     id: show.id,
     name: show.name,
+  };
+}
+
+function serializeSchemaVariable(variable: {
+  id: string;
+  category: string;
+  value: string;
+  label: string;
+  sortOrder: number;
+  isCore: boolean;
+}) {
+  return {
+    id: variable.id,
+    category: variable.category,
+    value: variable.value,
+    label: variable.label,
+    sortOrder: variable.sortOrder,
+    isCore: variable.isCore,
   };
 }
 
@@ -82,6 +173,25 @@ async function ensureDefaultShows(tx: Prisma.TransactionClient) {
   }
 }
 
+async function ensureDefaultSchemaVariables(tx: Prisma.TransactionClient) {
+  for (const variable of DEFAULT_SCHEMA_VARIABLES) {
+    await tx.schemaVariable.upsert({
+      where: {
+        category_value: {
+          category: variable.category,
+          value: variable.value,
+        },
+      },
+      update: {
+        label: variable.label,
+        sortOrder: variable.sortOrder,
+        isCore: variable.isCore,
+      },
+      create: variable,
+    });
+  }
+}
+
 function formatDate(date: Date | null) {
   return date ? date.toISOString().slice(0, 10) : null;
 }
@@ -111,6 +221,80 @@ async function recordAdminLog(
   });
 }
 
+async function requireSchemaVariableValue(
+  tx: Prisma.TransactionClient,
+  category: string,
+  value: unknown,
+  fieldName: string,
+) {
+  const normalizedValue = requireString(value, fieldName);
+  const variable = await tx.schemaVariable.findUnique({
+    where: {
+      category_value: {
+        category,
+        value: normalizedValue,
+      },
+    },
+  });
+
+  if (!variable) {
+    throw new AppError(`${fieldName} is invalid.`);
+  }
+
+  return variable.value;
+}
+
+async function requireDecisionValue(
+  tx: Prisma.TransactionClient,
+  category: string,
+  value: unknown,
+  allowedValues: readonly string[],
+  fieldName: string,
+) {
+  const normalizedValue = await requireSchemaVariableValue(tx, category, value, fieldName);
+
+  if (!allowedValues.includes(normalizedValue)) {
+    throw new AppError(`${fieldName} is invalid.`);
+  }
+
+  return normalizedValue;
+}
+
+async function countVariableReferences(category: string, value: string) {
+  switch (category) {
+    case VARIABLE_CATEGORIES.PERSON_ROLE:
+      return prisma.person.count({ where: { role: value } });
+    case VARIABLE_CATEGORIES.IDEA_STATUS:
+      return prisma.idea.count({ where: { status: value } });
+    case VARIABLE_CATEGORIES.IDEA_RANK:
+      return prisma.idea.count({ where: { rank: value } });
+    case VARIABLE_CATEGORIES.BEAT_ASSIGNEE_ROLE:
+      return prisma.beat.count({ where: { assignedRole: value } });
+    case VARIABLE_CATEGORIES.BEAT_STATUS:
+      return prisma.beat.count({ where: { status: value } });
+    case VARIABLE_CATEGORIES.ASSIGNMENT_TYPE:
+      return prisma.assignment.count({ where: { assignmentType: value } });
+    case VARIABLE_CATEGORIES.ASSIGNMENT_STATUS:
+      return prisma.assignment.count({ where: { status: value } });
+    case VARIABLE_CATEGORIES.ASSIGNMENT_GRADE:
+      return prisma.assignment.count({ where: { grade: value } });
+    case VARIABLE_CATEGORIES.PRODUCTION_TYPE:
+      return prisma.assignment.count({ where: { prodSuffix: value } });
+    default:
+      throw new AppError("Schema variable category is invalid.");
+  }
+}
+
+function requireVariableCategory(value: unknown) {
+  const category = requireString(value, "Category");
+
+  if (!VARIABLE_CATEGORY_VALUES.includes(category as (typeof VARIABLE_CATEGORY_VALUES)[number])) {
+    throw new AppError("Category is invalid.");
+  }
+
+  return category;
+}
+
 async function nextCode(
   tx: Prisma.TransactionClient,
   key: "IDEA" | "BEAT" | "ASSIGNMENT",
@@ -137,7 +321,7 @@ function assertEditCode(code: string) {
 function serializePerson(person: {
   id: string;
   name: string;
-  role: PersonRole;
+  role: string;
 }) {
   return {
     id: person.id,
@@ -253,10 +437,14 @@ function serializeAssignment(
 export async function getWorkflowSnapshot() {
   return prisma.$transaction(async (tx) => {
     await ensureDefaultShows(tx);
+    await ensureDefaultSchemaVariables(tx);
 
-    const [shows, people, ideas, beats, assignments, adminLogs] = await Promise.all([
+    const [shows, schemaVariables, people, ideas, beats, assignments, adminLogs] = await Promise.all([
       tx.show.findMany({
         orderBy: { name: "asc" },
+      }),
+      tx.schemaVariable.findMany({
+        orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { label: "asc" }],
       }),
       tx.person.findMany({
         orderBy: [{ role: "asc" }, { name: "asc" }],
@@ -280,6 +468,7 @@ export async function getWorkflowSnapshot() {
 
     return {
       shows: shows.map(serializeShow),
+      schemaVariables: schemaVariables.map(serializeSchemaVariable),
       people: people.map(serializePerson),
       ideas: ideas.map(serializeIdea),
       beats: beats.map(serializeBeat),
@@ -319,8 +508,8 @@ export async function createIdea(payload: Record<string, unknown>) {
       data: {
         code,
         ...data,
-        status: IdeaStatus.NOT_REVIEWED,
-        rank: IdeaRank.UNRANKED,
+        status: "NOT_REVIEWED",
+        rank: "UNRANKED",
       },
     });
 
@@ -329,15 +518,19 @@ export async function createIdea(payload: Record<string, unknown>) {
 }
 
 export async function reviewIdea(id: string, payload: Record<string, unknown>) {
-  const status = parseEnumValue(payload.status, IDEA_STATUS_VALUES, "Status");
-  const rank = parseEnumValue(payload.rank, IDEA_RANK_VALUES, "Rank");
+  await prisma.$transaction(async (tx) => {
+    const [status, rank] = await Promise.all([
+      requireSchemaVariableValue(tx, VARIABLE_CATEGORIES.IDEA_STATUS, payload.status, "Status"),
+      requireSchemaVariableValue(tx, VARIABLE_CATEGORIES.IDEA_RANK, payload.rank, "Rank"),
+    ]);
 
-  await prisma.idea.update({
-    where: { id },
-    data: {
-      status,
-      rank,
-    },
+    await tx.idea.update({
+      where: { id },
+      data: {
+        status,
+        rank,
+      },
+    });
   });
 }
 
@@ -354,13 +547,19 @@ export async function createBeat(payload: Record<string, unknown>) {
     note: requireString(payload.note, "Note"),
     docLink: optionalString(payload.docLink),
     assignedToId: requireString(payload.assignedToId, "Assigned to"),
-    assignedRole: parseEnumValue(payload.assignedRole, BEAT_ASSIGNEE_ROLE_VALUES, "Assigned role"),
     requestRaisedOn: parseDateInput(payload.requestRaisedOn, "Request raised on"),
     expectedStartDate: parseDateInput(payload.expectedStartDate, "Expected start date"),
     expectedCompleteDate: parseDateInput(payload.expectedCompleteDate, "Expected complete date"),
   };
 
   return prisma.$transaction(async (tx) => {
+    const assignedRole = await requireSchemaVariableValue(
+      tx,
+      VARIABLE_CATEGORIES.BEAT_ASSIGNEE_ROLE,
+      payload.assignedRole,
+      "Assigned role",
+    );
+
     const [idea, assignee] = await Promise.all([
       tx.idea.findUnique({ where: { id: data.ideaId } }),
       tx.person.findUnique({ where: { id: data.assignedToId } }),
@@ -380,7 +579,8 @@ export async function createBeat(payload: Record<string, unknown>) {
       data: {
         code,
         ...data,
-        status: BeatStatus.ASSIGNED,
+        assignedRole,
+        status: "ASSIGNED",
       },
     });
 
@@ -395,30 +595,34 @@ export async function submitBeat(id: string, payload: Record<string, unknown>) {
     where: { id },
     data: {
       docLink,
-      status: BeatStatus.SUBMITTED,
+      status: "SUBMITTED",
       submittedOn: new Date(),
     },
   });
 }
 
 export async function reviewBeat(id: string, payload: Record<string, unknown>) {
-  const decision = parseEnumValue(
-    payload.decision,
-    [BeatStatus.APPROVED_FOR_SCRIPT_WRITING, BeatStatus.TO_BE_REDONE] as const,
-    "Decision",
-  );
-
   const reviewedById = requireString(payload.reviewedById, "Reviewed by");
   const notes = optionalString(payload.notes);
 
-  await prisma.beat.update({
-    where: { id },
-    data: {
-      status: decision,
-      reviewedById,
-      reviewedOn: new Date(),
-      reviewNotes: notes,
-    },
+  await prisma.$transaction(async (tx) => {
+    const decision = await requireDecisionValue(
+      tx,
+      VARIABLE_CATEGORIES.BEAT_STATUS,
+      payload.decision,
+      ["APPROVED_FOR_SCRIPT_WRITING", "TO_BE_REDONE"],
+      "Decision",
+    );
+
+    await tx.beat.update({
+      where: { id },
+      data: {
+        status: decision,
+        reviewedById,
+        reviewedOn: new Date(),
+        reviewNotes: notes,
+      },
+    });
   });
 }
 
@@ -443,7 +647,7 @@ export async function createAssignmentFromBeat(payload: Record<string, unknown>)
       throw new AppError("Beat was not found.", 404);
     }
 
-    if (beat.status !== BeatStatus.APPROVED_FOR_SCRIPT_WRITING) {
+    if (beat.status !== "APPROVED_FOR_SCRIPT_WRITING") {
       throw new AppError("Only approved beats can become writing assignments.");
     }
 
@@ -452,7 +656,7 @@ export async function createAssignmentFromBeat(payload: Record<string, unknown>)
     await tx.assignment.create({
       data: {
         code,
-        assignmentType: AssignmentType.NEW,
+        assignmentType: "NEW",
         beatId: beat.id,
         show: beat.idea.show,
         angle: beat.title,
@@ -461,7 +665,7 @@ export async function createAssignmentFromBeat(payload: Record<string, unknown>)
         dateAssigned: data.dateAssigned,
         dateDue: data.dateDue,
         notes: data.notes,
-        status: AssignmentStatus.ASSIGNED_TO_WRITER,
+        status: "ASSIGNED_TO_WRITER",
         editCode: data.editCode,
       },
     });
@@ -471,12 +675,6 @@ export async function createAssignmentFromBeat(payload: Record<string, unknown>)
 }
 
 export async function createImprovementAssignment(payload: Record<string, unknown>) {
-  const assignmentType = parseEnumValue(payload.assignmentType ?? AssignmentType.IMPROVEMENT, ASSIGNMENT_TYPE_VALUES, "Assignment type");
-
-  if (assignmentType !== AssignmentType.IMPROVEMENT) {
-    throw new AppError("Improvement assignments must use the IMPROVEMENT type.");
-  }
-
   const data = {
     show: requireString(payload.show, "Show"),
     angle: requireString(payload.angle, "Angle"),
@@ -491,12 +689,23 @@ export async function createImprovementAssignment(payload: Record<string, unknow
   };
 
   return prisma.$transaction(async (tx) => {
+    const assignmentType = await requireSchemaVariableValue(
+      tx,
+      VARIABLE_CATEGORIES.ASSIGNMENT_TYPE,
+      payload.assignmentType ?? "IMPROVEMENT",
+      "Assignment type",
+    );
+
+    if (assignmentType !== "IMPROVEMENT") {
+      throw new AppError("Improvement assignments must use the IMPROVEMENT type.");
+    }
+
     const code = await nextCode(tx, "ASSIGNMENT", "", 5);
 
     await tx.assignment.create({
       data: {
         code,
-        assignmentType: AssignmentType.IMPROVEMENT,
+        assignmentType: "IMPROVEMENT",
         show: data.show,
         angle: data.angle,
         writerId: data.writerId,
@@ -504,7 +713,7 @@ export async function createImprovementAssignment(payload: Record<string, unknow
         dateAssigned: data.dateAssigned,
         dateDue: data.dateDue,
         notes: data.notes,
-        status: AssignmentStatus.ASSIGNED_TO_WRITER,
+        status: "ASSIGNED_TO_WRITER",
         editCode: data.editCode,
         codeToRework: data.codeToRework,
         updatedBeats: data.updatedBeats,
@@ -522,18 +731,18 @@ export async function submitAssignment(id: string, payload: Record<string, unkno
     where: { id },
     data: {
       submission,
-      status: AssignmentStatus.COMPLETED_BY_WRITER,
+      status: "COMPLETED_BY_WRITER",
       submittedAt: new Date(),
     },
   });
 }
 
 export async function reviewAssignment(id: string, payload: Record<string, unknown>) {
-  const grade = parseEnumValue(payload.grade, ASSIGNMENT_GRADE_VALUES, "Grade");
   const feedback = optionalString(payload.feedback);
   const finalOutput = requireString(payload.finalOutput, "Final output");
 
   return prisma.$transaction(async (tx) => {
+    const grade = await requireSchemaVariableValue(tx, VARIABLE_CATEGORIES.ASSIGNMENT_GRADE, payload.grade, "Grade");
     const assignment = await tx.assignment.findUnique({
       where: { id },
     });
@@ -542,7 +751,7 @@ export async function reviewAssignment(id: string, payload: Record<string, unkno
       throw new AppError("Assignment was not found.", 404);
     }
 
-    if (grade === AssignmentGrade.STRONG_OUTPUT) {
+    if (grade === "STRONG_OUTPUT") {
       await tx.assignment.update({
         where: { id },
         data: {
@@ -556,13 +765,13 @@ export async function reviewAssignment(id: string, payload: Record<string, unkno
       return { createdRedoCode: null };
     }
 
-    if (grade === AssignmentGrade.REDO) {
+    if (grade === "REDO") {
       const redoCode = await nextCode(tx, "ASSIGNMENT", "", 5);
 
       await tx.assignment.update({
         where: { id },
         data: {
-          status: AssignmentStatus.REWRITE_REQUIRED,
+          status: "REWRITE_REQUIRED",
           grade,
           feedback,
           finalOutput,
@@ -582,7 +791,7 @@ export async function reviewAssignment(id: string, payload: Record<string, unkno
           dateAssigned: new Date(),
           dateDue: assignment.dateDue,
           notes: assignment.notes,
-          status: AssignmentStatus.ASSIGNED_TO_WRITER,
+          status: "ASSIGNED_TO_WRITER",
           parentAssignmentId: assignment.id,
           editCode: assignment.editCode,
           codeToRework: assignment.code,
@@ -596,7 +805,7 @@ export async function reviewAssignment(id: string, payload: Record<string, unkno
     await tx.assignment.update({
       where: { id },
       data: {
-        status: AssignmentStatus.REWRITE_REQUIRED,
+        status: "REWRITE_REQUIRED",
         grade,
         feedback,
         finalOutput,
@@ -609,9 +818,14 @@ export async function reviewAssignment(id: string, payload: Record<string, unkno
 }
 
 export async function markAssignmentReady(id: string, payload: Record<string, unknown>) {
-  const prodSuffix = parseEnumValue(payload.prodSuffix, PRODUCTION_TYPE_VALUES, "Production type");
-
   await prisma.$transaction(async (tx) => {
+    const prodSuffix = await requireSchemaVariableValue(
+      tx,
+      VARIABLE_CATEGORIES.PRODUCTION_TYPE,
+      payload.prodSuffix,
+      "Production type",
+    );
+
     const assignment = await tx.assignment.findUnique({
       where: { id },
     });
@@ -633,8 +847,97 @@ export async function markAssignmentReady(id: string, payload: Record<string, un
       data: {
         code: nextCodeValue,
         prodSuffix,
-        status: AssignmentStatus.READY_FOR_PRODUCTION,
+        status: "READY_FOR_PRODUCTION",
         productionReadyAt: new Date(),
+      },
+    });
+  });
+}
+
+export async function createSchemaVariable(payload: Record<string, unknown>) {
+  const category = requireVariableCategory(payload.category);
+  const value = requireString(payload.value, "Value").toUpperCase().replaceAll(" ", "_");
+  const label = requireString(payload.label, "Label");
+
+  return prisma.$transaction(async (tx) => {
+    const existingVariable = await tx.schemaVariable.findUnique({
+      where: {
+        category_value: {
+          category,
+          value,
+        },
+      },
+    });
+
+    if (existingVariable) {
+      throw new AppError("This schema variable already exists.", 409);
+    }
+
+    const categoryValues = await tx.schemaVariable.findMany({
+      where: { category },
+      orderBy: { sortOrder: "desc" },
+      take: 1,
+      select: { sortOrder: true },
+    });
+
+    const variable = await tx.schemaVariable.create({
+      data: {
+        category,
+        value,
+        label,
+        sortOrder: (categoryValues[0]?.sortOrder ?? 0) + 10,
+        isCore: false,
+      },
+    });
+
+    await recordAdminLog(tx, {
+      action: "CREATE_SCHEMA_VARIABLE",
+      targetType: "SCHEMA_VARIABLE",
+      targetId: variable.id,
+      targetLabel: `${variable.category}:${variable.value}`,
+      payload: {
+        category: variable.category,
+        value: variable.value,
+        label: variable.label,
+      },
+    });
+
+    return variable;
+  });
+}
+
+export async function removeSchemaVariable(id: string) {
+  await prisma.$transaction(async (tx) => {
+    const variable = await tx.schemaVariable.findUnique({
+      where: { id },
+    });
+
+    if (!variable) {
+      throw new AppError("Schema variable was not found.", 404);
+    }
+
+    if (variable.isCore) {
+      throw new AppError("Core schema variables cannot be removed.", 409);
+    }
+
+    const referenceCount = await countVariableReferences(variable.category, variable.value);
+    if (referenceCount > 0) {
+      throw new AppError("This schema variable is already used in workflow data and cannot be deleted.", 409);
+    }
+
+    await tx.schemaVariable.delete({
+      where: { id },
+    });
+
+    await recordAdminLog(tx, {
+      action: "REMOVE_SCHEMA_VARIABLE",
+      targetType: "SCHEMA_VARIABLE",
+      targetId: variable.id,
+      targetLabel: `${variable.category}:${variable.value}`,
+      payload: {
+        category: variable.category,
+        value: variable.value,
+        label: variable.label,
       },
     });
   });
@@ -642,9 +945,9 @@ export async function markAssignmentReady(id: string, payload: Record<string, un
 
 export async function createPerson(payload: Record<string, unknown>) {
   const name = requireString(payload.name, "Name");
-  const role = parseEnumValue(payload.role, PERSON_ROLE_VALUES, "Role");
 
   return prisma.$transaction(async (tx) => {
+    const role = await requireSchemaVariableValue(tx, VARIABLE_CATEGORIES.PERSON_ROLE, payload.role, "Role");
     const existingPerson = await tx.person.findUnique({
       where: { name },
     });

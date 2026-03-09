@@ -8,65 +8,10 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum PersonRole {
-  WRITER
-  POD_LEAD
-  BUSINESS
-}
-
-enum IdeaStatus {
-  NOT_REVIEWED
-  ACCEPTED
-  REJECTED
-}
-
-enum IdeaRank {
-  UNRANKED
-  HIGH_CONVICTION
-  BET
-  REJECT
-}
-
-enum BeatAssigneeRole {
-  WRITER
-  POD_LEAD
-}
-
-enum BeatStatus {
-  ASSIGNED
-  SUBMITTED
-  APPROVED_FOR_SCRIPT_WRITING
-  TO_BE_REDONE
-}
-
-enum AssignmentType {
-  NEW
-  IMPROVEMENT
-}
-
-enum AssignmentStatus {
-  ASSIGNED_TO_WRITER
-  COMPLETED_BY_WRITER
-  READY_FOR_PRODUCTION
-  REWRITE_REQUIRED
-}
-
-enum AssignmentGrade {
-  STRONG_OUTPUT
-  MINOR_FLAWS
-  MAJOR_FLAWS
-  REDO
-}
-
-enum ProductionType {
-  GA
-  GU
-}
-
 model Person {
   id                  String       @id @default(cuid())
   name                String       @unique
-  role                PersonRole
+  role                String
   ideasSubmitted      Idea[]       @relation("IdeaSubmittedBy")
   beatsAssigned       Beat[]       @relation("BeatAssignedTo")
   beatsReviewed       Beat[]       @relation("BeatReviewedBy")
@@ -81,6 +26,19 @@ model Show {
   name      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model SchemaVariable {
+  id        String   @id @default(cuid())
+  category  String
+  value     String
+  label     String
+  sortOrder Int      @default(0)
+  isCore    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, value])
 }
 
 model AdminLog {
@@ -106,8 +64,8 @@ model Idea {
   submittedById String
   submittedBy   Person     @relation("IdeaSubmittedBy", fields: [submittedById], references: [id])
   submittedOn   DateTime
-  status        IdeaStatus @default(NOT_REVIEWED)
-  rank          IdeaRank   @default(UNRANKED)
+  status        String     @default("NOT_REVIEWED")
+  rank          String     @default("UNRANKED")
   setting       String
   opening       String
   tickingClock  String
@@ -136,11 +94,11 @@ model Beat {
   docLink              String?
   assignedToId         String
   assignedTo           Person           @relation("BeatAssignedTo", fields: [assignedToId], references: [id])
-  assignedRole         BeatAssigneeRole
+  assignedRole         String
   requestRaisedOn      DateTime
   expectedStartDate    DateTime
   expectedCompleteDate DateTime
-  status               BeatStatus       @default(ASSIGNED)
+  status               String           @default("ASSIGNED")
   submittedOn          DateTime?
   reviewedById         String?
   reviewedBy           Person?          @relation("BeatReviewedBy", fields: [reviewedById], references: [id])
@@ -154,7 +112,7 @@ model Beat {
 model Assignment {
   id                  String            @id @default(cuid())
   code                String            @unique
-  assignmentType      AssignmentType
+  assignmentType      String
   beatId              String?
   beat                Beat?             @relation(fields: [beatId], references: [id], onDelete: SetNull)
   show                String
@@ -166,12 +124,12 @@ model Assignment {
   dateAssigned        DateTime
   dateDue             DateTime
   notes               String?
-  status              AssignmentStatus  @default(ASSIGNED_TO_WRITER)
+  status              String            @default("ASSIGNED_TO_WRITER")
   submission          String?
-  grade               AssignmentGrade?
+  grade               String?
   feedback            String?
   finalOutput         String?
-  prodSuffix          ProductionType?
+  prodSuffix          String?
   submittedAt         DateTime?
   reviewedAt          DateTime?
   productionReadyAt   DateTime?

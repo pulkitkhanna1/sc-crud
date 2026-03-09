@@ -4,6 +4,7 @@ import type {
   CreateIdeaInput,
   CreateImprovementAssignmentInput,
   CreatePersonInput,
+  CreateSchemaVariableInput,
   CreateShowInput,
   ProductionInput,
   ReviewAssignmentInput,
@@ -20,6 +21,7 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 function normalizeWorkflowSnapshot(snapshot: Partial<WorkflowSnapshot>): WorkflowSnapshot {
   return {
     shows: Array.isArray(snapshot.shows) ? snapshot.shows : [],
+    schemaVariables: Array.isArray(snapshot.schemaVariables) ? snapshot.schemaVariables : [],
     adminLogs: Array.isArray(snapshot.adminLogs) ? snapshot.adminLogs : [],
     people: Array.isArray(snapshot.people) ? snapshot.people : [],
     ideas: Array.isArray(snapshot.ideas) ? snapshot.ideas : [],
@@ -143,6 +145,17 @@ export const api = {
   },
   removeShow(id: string) {
     return request(`/admin/shows/${id}`, {
+      method: "DELETE",
+    });
+  },
+  createSchemaVariable(input: CreateSchemaVariableInput) {
+    return request("/admin/schema-variables", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  removeSchemaVariable(id: string) {
+    return request(`/admin/schema-variables/${id}`, {
       method: "DELETE",
     });
   },

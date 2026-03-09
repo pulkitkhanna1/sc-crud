@@ -1,17 +1,140 @@
-import {
-  AssignmentGrade,
-  AssignmentStatus,
-  AssignmentType,
-  BeatAssigneeRole,
-  BeatStatus,
-  IdeaRank,
-  IdeaStatus,
-  PersonRole,
-  ProductionType,
-  PrismaClient,
-} from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+
+const PersonRole = {
+  WRITER: "WRITER",
+  POD_LEAD: "POD_LEAD",
+  BUSINESS: "BUSINESS",
+} as const;
+
+const IdeaStatus = {
+  NOT_REVIEWED: "NOT_REVIEWED",
+  ACCEPTED: "ACCEPTED",
+  REJECTED: "REJECTED",
+} as const;
+
+const IdeaRank = {
+  UNRANKED: "UNRANKED",
+  HIGH_CONVICTION: "HIGH_CONVICTION",
+  BET: "BET",
+  REJECT: "REJECT",
+} as const;
+
+const BeatAssigneeRole = {
+  WRITER: "WRITER",
+  POD_LEAD: "POD_LEAD",
+} as const;
+
+const BeatStatus = {
+  ASSIGNED: "ASSIGNED",
+  SUBMITTED: "SUBMITTED",
+  APPROVED_FOR_SCRIPT_WRITING: "APPROVED_FOR_SCRIPT_WRITING",
+  TO_BE_REDONE: "TO_BE_REDONE",
+} as const;
+
+const AssignmentType = {
+  NEW: "NEW",
+  IMPROVEMENT: "IMPROVEMENT",
+} as const;
+
+const AssignmentStatus = {
+  ASSIGNED_TO_WRITER: "ASSIGNED_TO_WRITER",
+  COMPLETED_BY_WRITER: "COMPLETED_BY_WRITER",
+  READY_FOR_PRODUCTION: "READY_FOR_PRODUCTION",
+  REWRITE_REQUIRED: "REWRITE_REQUIRED",
+} as const;
+
+const AssignmentGrade = {
+  STRONG_OUTPUT: "STRONG_OUTPUT",
+  MINOR_FLAWS: "MINOR_FLAWS",
+  MAJOR_FLAWS: "MAJOR_FLAWS",
+  REDO: "REDO",
+} as const;
+
+const ProductionType = {
+  GA: "GA",
+  GU: "GU",
+} as const;
+
+const schemaVariables = [
+  { category: "PERSON_ROLE", value: PersonRole.WRITER, label: "Writer", sortOrder: 10, isCore: true },
+  { category: "PERSON_ROLE", value: PersonRole.POD_LEAD, label: "POD Lead", sortOrder: 20, isCore: true },
+  { category: "PERSON_ROLE", value: PersonRole.BUSINESS, label: "Business", sortOrder: 30, isCore: true },
+  { category: "IDEA_STATUS", value: IdeaStatus.NOT_REVIEWED, label: "Not Reviewed", sortOrder: 10, isCore: true },
+  { category: "IDEA_STATUS", value: IdeaStatus.ACCEPTED, label: "Accepted", sortOrder: 20, isCore: true },
+  { category: "IDEA_STATUS", value: IdeaStatus.REJECTED, label: "Rejected", sortOrder: 30, isCore: true },
+  { category: "IDEA_RANK", value: IdeaRank.UNRANKED, label: "Unranked", sortOrder: 10, isCore: true },
+  { category: "IDEA_RANK", value: IdeaRank.HIGH_CONVICTION, label: "High Conviction", sortOrder: 20, isCore: true },
+  { category: "IDEA_RANK", value: IdeaRank.BET, label: "Bet", sortOrder: 30, isCore: true },
+  { category: "IDEA_RANK", value: IdeaRank.REJECT, label: "Reject", sortOrder: 40, isCore: true },
+  { category: "BEAT_ASSIGNEE_ROLE", value: BeatAssigneeRole.WRITER, label: "Writer", sortOrder: 10, isCore: true },
+  { category: "BEAT_ASSIGNEE_ROLE", value: BeatAssigneeRole.POD_LEAD, label: "POD Lead", sortOrder: 20, isCore: true },
+  { category: "BEAT_STATUS", value: BeatStatus.ASSIGNED, label: "Assigned", sortOrder: 10, isCore: true },
+  { category: "BEAT_STATUS", value: BeatStatus.SUBMITTED, label: "Submitted", sortOrder: 20, isCore: true },
+  {
+    category: "BEAT_STATUS",
+    value: BeatStatus.APPROVED_FOR_SCRIPT_WRITING,
+    label: "Approved for Script Writing",
+    sortOrder: 30,
+    isCore: true,
+  },
+  { category: "BEAT_STATUS", value: BeatStatus.TO_BE_REDONE, label: "To Be Redone", sortOrder: 40, isCore: true },
+  { category: "ASSIGNMENT_TYPE", value: AssignmentType.NEW, label: "New Beat", sortOrder: 10, isCore: true },
+  { category: "ASSIGNMENT_TYPE", value: AssignmentType.IMPROVEMENT, label: "Improvement", sortOrder: 20, isCore: true },
+  {
+    category: "ASSIGNMENT_STATUS",
+    value: AssignmentStatus.ASSIGNED_TO_WRITER,
+    label: "Assigned to Writer",
+    sortOrder: 10,
+    isCore: true,
+  },
+  {
+    category: "ASSIGNMENT_STATUS",
+    value: AssignmentStatus.COMPLETED_BY_WRITER,
+    label: "Completed by Writer",
+    sortOrder: 20,
+    isCore: true,
+  },
+  {
+    category: "ASSIGNMENT_STATUS",
+    value: AssignmentStatus.READY_FOR_PRODUCTION,
+    label: "Ready for Production",
+    sortOrder: 30,
+    isCore: true,
+  },
+  {
+    category: "ASSIGNMENT_STATUS",
+    value: AssignmentStatus.REWRITE_REQUIRED,
+    label: "Rewrite Required",
+    sortOrder: 40,
+    isCore: true,
+  },
+  {
+    category: "ASSIGNMENT_GRADE",
+    value: AssignmentGrade.STRONG_OUTPUT,
+    label: "Strong Output",
+    sortOrder: 10,
+    isCore: true,
+  },
+  {
+    category: "ASSIGNMENT_GRADE",
+    value: AssignmentGrade.MINOR_FLAWS,
+    label: "Minor Flaws",
+    sortOrder: 20,
+    isCore: true,
+  },
+  {
+    category: "ASSIGNMENT_GRADE",
+    value: AssignmentGrade.MAJOR_FLAWS,
+    label: "Major Flaws",
+    sortOrder: 30,
+    isCore: true,
+  },
+  { category: "ASSIGNMENT_GRADE", value: AssignmentGrade.REDO, label: "Redo", sortOrder: 40, isCore: true },
+  { category: "PRODUCTION_TYPE", value: ProductionType.GA, label: "Q1 + TN", sortOrder: 10, isCore: true },
+  { category: "PRODUCTION_TYPE", value: ProductionType.GU, label: "Full Gen AI", sortOrder: 20, isCore: true },
+] as const;
 
 const writers = [
   "Ari Jacobson",
@@ -47,9 +170,14 @@ async function main() {
   await prisma.assignment.deleteMany();
   await prisma.beat.deleteMany();
   await prisma.idea.deleteMany();
+  await prisma.schemaVariable.deleteMany();
   await prisma.show.deleteMany();
   await prisma.person.deleteMany();
   await prisma.workflowCounter.deleteMany();
+
+  await prisma.schemaVariable.createMany({
+    data: schemaVariables,
+  });
 
   await prisma.show.createMany({
     data: shows.map((name) => ({ name })),
