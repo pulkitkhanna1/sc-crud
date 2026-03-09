@@ -17,6 +17,16 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 
+function normalizeWorkflowSnapshot(snapshot: Partial<WorkflowSnapshot>): WorkflowSnapshot {
+  return {
+    shows: Array.isArray(snapshot.shows) ? snapshot.shows : [],
+    people: Array.isArray(snapshot.people) ? snapshot.people : [],
+    ideas: Array.isArray(snapshot.ideas) ? snapshot.ideas : [],
+    beats: Array.isArray(snapshot.beats) ? snapshot.beats : [],
+    assignments: Array.isArray(snapshot.assignments) ? snapshot.assignments : [],
+  };
+}
+
 function createAdminHeaders(adminPassword?: string) {
   return adminPassword
     ? {
@@ -57,8 +67,9 @@ async function request<T>(path: string, init?: RequestInit) {
 }
 
 export const api = {
-  getWorkflow() {
-    return request<WorkflowSnapshot>("/workflow");
+  async getWorkflow() {
+    const snapshot = await request<Partial<WorkflowSnapshot>>("/workflow");
+    return normalizeWorkflowSnapshot(snapshot);
   },
   validateAdminPassword(adminPassword: string) {
     return request("/admin/validate", {
