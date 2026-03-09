@@ -29,9 +29,26 @@ function route(handler: Handler) {
   };
 }
 
+function normalizeSecret(value: string | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  const trimmed = value.trim();
+
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
+}
+
 function requireAdmin(req: any, _res: any, next: (error?: unknown) => void) {
-  const configuredPassword = process.env.ADMIN_PASSWORD ?? "PocketFM@123";
-  const providedPassword = req.header("x-admin-password");
+  const configuredPassword = normalizeSecret(process.env.ADMIN_PASSWORD ?? "PocketFM@123");
+  const providedPassword = normalizeSecret(req.header("x-admin-password") ?? undefined);
 
   if (providedPassword !== configuredPassword) {
     next(new AppError("Invalid admin password.", 401));
