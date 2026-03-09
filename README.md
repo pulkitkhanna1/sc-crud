@@ -12,6 +12,7 @@ This project converts the original single-file `content-workflow.tsx` prototype 
 ## What is persisted
 
 - People and roles
+- Shows
 - Ideas and idea review state
 - Beats and beat review state
 - Writing assignments
@@ -37,6 +38,7 @@ This project converts the original single-file `content-workflow.tsx` prototype 
 2. Update `.env` with that database connection.
    - `DATABASE_URL` should be your app connection string.
    - `DIRECT_URL` should be the direct connection string for Prisma migrations.
+   - `ADMIN_PASSWORD` protects the Admin tab actions. It defaults to `PocketFM@123`.
 3. Install dependencies:
    - `npm install`
 4. Generate Prisma client:
@@ -78,6 +80,7 @@ The simplest path is:
    - `DIRECT_URL`
    - `CLIENT_ORIGIN`
    - `VITE_API_URL`
+   - `ADMIN_PASSWORD`
 4. Keep `VITE_API_URL` as `/api`.
 5. Run the Prisma migration once against the hosted database:
    - `npm run prisma:migrate -- --name init`
@@ -101,4 +104,5 @@ The Vercel config already assumes:
 - On Vercel, the frontend is static and the API runs as a serverless function.
 - Prisma is configured against PostgreSQL by default for real persistence and future multi-user use.
 - `DIRECT_URL` is included for Prisma migrations against pooled serverless Postgres setups.
+- The Admin tab manages reference data such as shows and team members. Enum-backed workflow values are visible there for reference but still require a schema/code change to alter.
 - If you want auth next, the clean insertion point is the Express API layer and session header in the React app.

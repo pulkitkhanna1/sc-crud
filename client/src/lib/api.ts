@@ -4,6 +4,7 @@ import type {
   CreateIdeaInput,
   CreateImprovementAssignmentInput,
   CreatePersonInput,
+  CreateShowInput,
   ProductionInput,
   ReviewAssignmentInput,
   ReviewAssignmentResult,
@@ -16,12 +17,21 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 
+function createAdminHeaders(adminPassword?: string) {
+  return adminPassword
+    ? {
+        "x-admin-password": adminPassword,
+      }
+    : {};
+}
+
 async function request<T>(path: string, init?: RequestInit) {
   const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
     },
-    ...init,
   });
 
   if (!response.ok) {
@@ -49,6 +59,11 @@ async function request<T>(path: string, init?: RequestInit) {
 export const api = {
   getWorkflow() {
     return request<WorkflowSnapshot>("/workflow");
+  },
+  validateAdminPassword(adminPassword: string) {
+    return request("/admin/validate", {
+      headers: createAdminHeaders(adminPassword),
+    });
   },
   createIdea(input: CreateIdeaInput) {
     return request("/ideas", {
@@ -110,15 +125,30 @@ export const api = {
       body: JSON.stringify(input),
     });
   },
-  createPerson(input: CreatePersonInput) {
-    return request("/people", {
+  createPerson(input: CreatePersonInput, adminPassword: string) {
+    return request("/admin/people", {
       method: "POST",
+      headers: createAdminHeaders(adminPassword),
       body: JSON.stringify(input),
     });
   },
-  removePerson(id: string) {
-    return request(`/people/${id}`, {
+  removePerson(id: string, adminPassword: string) {
+    return request(`/admin/people/${id}`, {
       method: "DELETE",
+      headers: createAdminHeaders(adminPassword),
+    });
+  },
+  createShow(input: CreateShowInput, adminPassword: string) {
+    return request("/admin/shows", {
+      method: "POST",
+      headers: createAdminHeaders(adminPassword),
+      body: JSON.stringify(input),
+    });
+  },
+  removeShow(id: string, adminPassword: string) {
+    return request(`/admin/shows/${id}`, {
+      method: "DELETE",
+      headers: createAdminHeaders(adminPassword),
     });
   },
 };

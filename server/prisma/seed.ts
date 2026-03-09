@@ -32,6 +32,7 @@ const writers = [
 
 const podLeads = ["Dan Woodward", "Joshua Roth", "Nishant Gilatar", "Paul Lee"];
 const business = ["Aakash Ahuja", "Jacob Berman", "Lux Saxena", "Pranav Patki", "Yadhu Gopal"];
+const shows = ["FLBM", "MVS", "WBT"];
 
 function dateOnly(value: string) {
   return new Date(`${value}T12:00:00.000Z`);
@@ -45,8 +46,13 @@ async function main() {
   await prisma.assignment.deleteMany();
   await prisma.beat.deleteMany();
   await prisma.idea.deleteMany();
+  await prisma.show.deleteMany();
   await prisma.person.deleteMany();
   await prisma.workflowCounter.deleteMany();
+
+  await prisma.show.createMany({
+    data: shows.map((name) => ({ name })),
+  });
 
   for (const name of writers) {
     await prisma.person.create({

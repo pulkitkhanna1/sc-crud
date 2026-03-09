@@ -40,8 +40,6 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
 
   const submitTarget = snapshot.beats.find((beat) => beat.id === submitBeatId) ?? null;
   const reviewTarget = snapshot.beats.find((beat) => beat.id === reviewBeatId) ?? null;
-  const reviewerOptions = snapshot.people.filter((person) => person.role === "BUSINESS" || person.role === "POD_LEAD");
-
   async function handleSubmitBeat(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -219,14 +217,14 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
                         className="secondary-button"
                         type="button"
                         onClick={() => {
-                          setReviewBeatId(beat.id);
-                          setReviewForm({
-                            decision: "APPROVED_FOR_SCRIPT_WRITING",
-                            reviewedById: session.personId,
-                            notes: beat.reviewNotes,
-                          });
-                        }}
-                      >
+                        setReviewBeatId(beat.id);
+                        setReviewForm({
+                          decision: "APPROVED_FOR_SCRIPT_WRITING",
+                          reviewedById: session.personId,
+                          notes: beat.reviewNotes ?? "",
+                        });
+                      }}
+                    >
                         Review beat
                       </button>
                     ) : null}
@@ -279,17 +277,7 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
 
             <label className="field">
               <span>Reviewed by</span>
-              <select
-                value={reviewForm.reviewedById}
-                onChange={(event) => setReviewForm((current) => ({ ...current, reviewedById: event.target.value }))}
-              >
-                <option value="">Select a reviewer</option>
-                {reviewerOptions.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name}
-                  </option>
-                ))}
-              </select>
+              <input readOnly value={session.personName} />
             </label>
 
             <label className="field">

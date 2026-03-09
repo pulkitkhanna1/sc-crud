@@ -6,15 +6,18 @@ import {
   createIdea,
   createImprovementAssignment,
   createPerson,
+  createShow,
   getWorkflowSnapshot,
   markAssignmentReady,
   removePerson,
+  removeShow,
   reviewAssignment,
   reviewBeat,
   reviewIdea,
   submitAssignment,
   submitBeat,
 } from "../lib/workflowService";
+import { AppError } from "../lib/validation";
 
 const router = Router();
 
@@ -24,6 +27,18 @@ function route(handler: Handler) {
   return (req: any, res: any, next: (error: unknown) => void) => {
     void handler(req, res).catch(next);
   };
+}
+
+function requireAdmin(req: any, _res: any, next: (error?: unknown) => void) {
+  const configuredPassword = process.env.ADMIN_PASSWORD ?? "PocketFM@123";
+  const providedPassword = req.header("x-admin-password");
+
+  if (providedPassword !== configuredPassword) {
+    next(new AppError("Invalid admin password.", 401));
+    return;
+  }
+
+  next();
 }
 
 router.get(
@@ -37,6 +52,14 @@ router.get(
   "/workflow",
   route(async (_req, res) => {
     res.json(await getWorkflowSnapshot());
+  }),
+);
+
+router.get(
+  "/admin/validate",
+  requireAdmin,
+  route(async (_req, res) => {
+    res.status(204).end();
   }),
 );
 
@@ -121,7 +144,8 @@ router.patch(
 );
 
 router.post(
-  "/people",
+  "/admin/people",
+  requireAdmin,
   route(async (req, res) => {
     const person = await createPerson(req.body);
     res.status(201).json(person);
@@ -129,9 +153,28 @@ router.post(
 );
 
 router.delete(
-  "/people/:id",
+  "/admin/people/:id",
+  requireAdmin,
   route(async (req, res) => {
     await removePerson(req.params.id);
+    res.status(204).end();
+  }),
+);
+
+router.post(
+  "/admin/shows",
+  requireAdmin,
+  route(async (req, res) => {
+    const show = await createShow(req.body);
+    res.status(201).json(show);
+  }),
+);
+
+router.delete(
+  "/admin/shows/:id",
+  requireAdmin,
+  route(async (req, res) => {
+    await removeShow(req.params.id);
     res.status(204).end();
   }),
 );

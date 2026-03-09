@@ -3,13 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { PERSON_ROLE_LABELS } from "@/lib/constants";
 import type { PersonRole, SessionState, WorkflowActions, WorkflowSnapshot } from "@/lib/types";
+import { AdminPage } from "@/pages/AdminPage";
 import { AssignmentsPage } from "@/pages/AssignmentsPage";
 import { BeatsPage } from "@/pages/BeatsPage";
 import { IdeasPage } from "@/pages/IdeasPage";
 import { OverviewPage } from "@/pages/OverviewPage";
 import { ProductionPage } from "@/pages/ProductionPage";
 
-type ViewId = "overview" | "ideas" | "beats" | "assignments" | "production";
+type ViewId = "overview" | "ideas" | "beats" | "assignments" | "production" | "admin";
+type Theme = "dark" | "light";
 
 const views: Array<{ id: ViewId; label: string }> = [
   { id: "overview", label: "Overview" },
@@ -17,7 +19,21 @@ const views: Array<{ id: ViewId; label: string }> = [
   { id: "beats", label: "Beats" },
   { id: "assignments", label: "Writing" },
   { id: "production", label: "Production" },
+  { id: "admin", label: "Admin" },
 ];
+
+function getInitialTheme(): Theme {
+  if (typeof window === "undefined") {
+    return "dark";
+  }
+
+  const storedTheme = window.localStorage.getItem("cpi-theme");
+  if (storedTheme === "dark" || storedTheme === "light") {
+    return storedTheme;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
 
 export default function App() {
   const [view, setView] = useState<ViewId>("overview");
@@ -25,8 +41,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [role, setRole] = useState<PersonRole>("BUSINESS");
+  const [role, setRole] = useState<PersonRole | "">("");
   const [personId, setPersonId] = useState("");
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [toast, setToast] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
 
   useEffect(() => {
@@ -37,6 +56,24 @@ export default function App() {
     const timeout = window.setTimeout(() => setToast(null), 3000);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem("cpi-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const storedPassword = window.sessionStorage.getItem("cpi-admin-password");
+    if (storedPassword) {
+      setAdminPassword(storedPassword);
+      setAdminUnlocked(true);
+    }
+  }, []);
 
   async function loadWorkflow() {
     const data = await api.getWorkflow();
@@ -66,25 +103,33 @@ export default function App() {
   }, []);
 
   const availablePeople = useMemo(() => {
+    if (!role) {
+      return [];
+    }
+
     return snapshot?.people.filter((person) => person.role === role) ?? [];
   }, [role, snapshot?.people]);
 
   useEffect(() => {
-    if (!availablePeople.length) {
-      return;
-    }
-
-    if (!availablePeople.some((person) => person.id === personId)) {
-      setPersonId(availablePeople[0].id);
+    if (personId && !availablePeople.some((person) => person.id === personId)) {
+      setPersonId("");
     }
   }, [availablePeople, personId]);
 
-  const session: SessionState = useMemo(() => {
+  const session = useMemo<SessionState | null>(() => {
+    if (!role) {
+      return null;
+    }
+
     const person = availablePeople.find((candidate) => candidate.id === personId);
+    if (!person) {
+      return null;
+    }
+
     return {
       role,
-      personId: person?.id ?? "",
-      personName: person?.name ?? PERSON_ROLE_LABELS[role],
+      personId: person.id,
+      personName: person.name,
     };
   }, [availablePeople, personId, role]);
 
@@ -111,6 +156,16 @@ export default function App() {
 
   const actions: WorkflowActions = {
     refresh: () => mutate(async () => undefined, "Workflow refreshed."),
+    validateAdminPassword: async (password) => {
+      await api.validateAdminPassword(password);
+      setAdminPassword(password);
+      setAdminUnlocked(true);
+      window.sessionStorage.setItem("cpi-admin-password", password);
+      setToast({
+        tone: "success",
+        message: "Admin unlocked.",
+      });
+    },
     createIdea: (input) => mutate(() => api.createIdea(input), "Idea saved."),
     reviewIdea: (id, input) => mutate(() => api.reviewIdea(id, input), "Idea updated."),
     createBeat: (input) => mutate(() => api.createBeat(input), "Beat created."),
@@ -123,8 +178,10 @@ export default function App() {
     submitAssignment: (id, input) => mutate(() => api.submitAssignment(id, input), "Script submitted."),
     reviewAssignment: (id, input) => mutate(() => api.reviewAssignment(id, input), "Assignment review saved."),
     markAssignmentReady: (id, input) => mutate(() => api.markAssignmentReady(id, input), "Marked ready for production."),
-    createPerson: (input) => mutate(() => api.createPerson(input), "Person added."),
-    removePerson: (id) => mutate(() => api.removePerson(id), "Person removed."),
+    createPerson: (input) => mutate(() => api.createPerson(input, adminPassword), "Person added."),
+    removePerson: (id) => mutate(() => api.removePerson(id, adminPassword), "Person removed."),
+    createShow: (input) => mutate(() => api.createShow(input, adminPassword), "Show added."),
+    removeShow: (id) => mutate(() => api.removeShow(id, adminPassword), "Show removed."),
   };
 
   if (loading) {
@@ -155,6 +212,14 @@ export default function App() {
     );
   }
 
+  const isBootstrapMode = snapshot.people.length === 0 || snapshot.shows.length === 0;
+  const missingSetupItems = [
+    snapshot.shows.length === 0 ? "shows" : null,
+    snapshot.people.length === 0 ? "team members" : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
+
   return (
     <div className="app-shell">
       {toast ? <div className={`toast toast-${toast.tone}`}>{toast.message}</div> : null}
@@ -163,13 +228,31 @@ export default function App() {
         <div>
           <p className="eyebrow">Full-stack workflow app</p>
           <h1 className="app-title">CPI Workflow Studio</h1>
-          <p className="app-subtitle">The original JSX prototype is now backed by a persisted API and workflow database.</p>
         </div>
 
         <div className="toolbar">
+          <button
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            className="theme-toggle"
+            type="button"
+            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+          >
+            <span className="theme-toggle-label">{theme === "dark" ? "Dark" : "Light"}</span>
+            <span className="theme-toggle-track">
+              <span className="theme-toggle-thumb">{theme === "dark" ? "☾" : "☀"}</span>
+            </span>
+          </button>
+
           <label className="field compact-field">
             <span>Role</span>
-            <select value={role} onChange={(event) => setRole(event.target.value as PersonRole)}>
+            <select
+              value={role}
+              onChange={(event) => {
+                setRole(event.target.value as PersonRole | "");
+                setPersonId("");
+              }}
+            >
+              <option value="">Select role</option>
               {Object.entries(PERSON_ROLE_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -180,7 +263,8 @@ export default function App() {
 
           <label className="field compact-field">
             <span>Session person</span>
-            <select value={personId} onChange={(event) => setPersonId(event.target.value)}>
+            <select disabled={!role || availablePeople.length === 0} value={personId} onChange={(event) => setPersonId(event.target.value)}>
+              <option value="">{role ? "Select person" : "Select role first"}</option>
               {availablePeople.map((person) => (
                 <option key={person.id} value={person.id}>
                   {person.name}
@@ -209,13 +293,50 @@ export default function App() {
       </nav>
 
       <main className="workspace-shell">
-        {view === "overview" ? <OverviewPage session={session} snapshot={snapshot} /> : null}
-        {view === "ideas" ? <IdeasPage actions={actions} busy={busy} session={session} snapshot={snapshot} /> : null}
-        {view === "beats" ? <BeatsPage actions={actions} busy={busy} session={session} snapshot={snapshot} /> : null}
-        {view === "assignments" ? (
-          <AssignmentsPage actions={actions} busy={busy} session={session} snapshot={snapshot} />
-        ) : null}
-        {view === "production" ? <ProductionPage session={session} snapshot={snapshot} /> : null}
+        {view === "admin" ? (
+          <AdminPage
+            actions={actions}
+            adminUnlocked={adminUnlocked}
+            busy={busy}
+            onLock={() => {
+              setAdminPassword("");
+              setAdminUnlocked(false);
+              window.sessionStorage.removeItem("cpi-admin-password");
+              setToast({
+                tone: "success",
+                message: "Admin locked.",
+              });
+            }}
+            snapshot={snapshot}
+          />
+        ) : isBootstrapMode ? (
+          <div className="center-shell">
+            <div className="loading-card">
+              <h1>Finish workspace setup</h1>
+              <p>
+                The database is missing {missingSetupItems}. Open the Admin tab, unlock it with the password, and add them
+                before using the workflow.
+              </p>
+            </div>
+          </div>
+        ) : !session ? (
+          <div className="center-shell">
+            <div className="loading-card">
+              <h1>Select role and person</h1>
+              <p>Everything in the workflow is now tied to the selected role and person. Choose both from the top-right controls to continue.</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {view === "overview" ? <OverviewPage session={session} snapshot={snapshot} /> : null}
+            {view === "ideas" ? <IdeasPage actions={actions} busy={busy} session={session} snapshot={snapshot} /> : null}
+            {view === "beats" ? <BeatsPage actions={actions} busy={busy} session={session} snapshot={snapshot} /> : null}
+            {view === "assignments" ? (
+              <AssignmentsPage actions={actions} busy={busy} session={session} snapshot={snapshot} />
+            ) : null}
+            {view === "production" ? <ProductionPage session={session} snapshot={snapshot} /> : null}
+          </>
+        )}
       </main>
     </div>
   );

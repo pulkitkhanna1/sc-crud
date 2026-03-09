@@ -40,6 +40,16 @@ const assignmentInclude = {
   parentAssignment: true,
 } satisfies Prisma.AssignmentInclude;
 
+function serializeShow(show: {
+  id: string;
+  name: string;
+}) {
+  return {
+    id: show.id,
+    name: show.name,
+  };
+}
+
 function formatDate(date: Date | null) {
   return date ? date.toISOString().slice(0, 10) : null;
 }
@@ -188,7 +198,10 @@ function serializeAssignment(
 }
 
 export async function getWorkflowSnapshot() {
-  const [people, ideas, beats, assignments] = await prisma.$transaction([
+  const [shows, people, ideas, beats, assignments] = await prisma.$transaction([
+    prisma.show.findMany({
+      orderBy: { name: "asc" },
+    }),
     prisma.person.findMany({
       orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
@@ -207,6 +220,7 @@ export async function getWorkflowSnapshot() {
   ]);
 
   return {
+    shows: shows.map(serializeShow),
     people: people.map(serializePerson),
     ideas: ideas.map(serializeIdea),
     beats: beats.map(serializeBeat),
@@ -577,6 +591,16 @@ export async function createPerson(payload: Record<string, unknown>) {
   });
 }
 
+export async function createShow(payload: Record<string, unknown>) {
+  const name = requireString(payload.name, "Show name");
+
+  return prisma.show.create({
+    data: {
+      name,
+    },
+  });
+}
+
 export async function removePerson(id: string) {
   const [submittedIdeas, assignedBeats, reviewedBeats, writingAssignments, podAssignments] = await Promise.all([
     prisma.idea.count({ where: { submittedById: id } }),
@@ -591,6 +615,29 @@ export async function removePerson(id: string) {
   }
 
   await prisma.person.delete({
+    where: { id },
+  });
+}
+
+export async function removeShow(id: string) {
+  const show = await prisma.show.findUnique({
+    where: { id },
+  });
+
+  if (!show) {
+    throw new AppError("Show was not found.", 404);
+  }
+
+  const [ideaCount, assignmentCount] = await Promise.all([
+    prisma.idea.count({ where: { show: show.name } }),
+    prisma.assignment.count({ where: { show: show.name } }),
+  ]);
+
+  if (ideaCount + assignmentCount > 0) {
+    throw new AppError("This show is already referenced in workflow data and cannot be deleted.", 409);
+  }
+
+  await prisma.show.delete({
     where: { id },
   });
 }

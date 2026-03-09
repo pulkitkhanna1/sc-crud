@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
@@ -10,21 +10,16 @@ import {
   ASSIGNMENT_STATUS_LABELS,
   ASSIGNMENT_STATUS_OPTIONS,
   ASSIGNMENT_TYPE_LABELS,
-  PERSON_ROLE_LABELS,
   PRODUCTION_TYPE_LABELS,
   PRODUCTION_TYPE_OPTIONS,
-  SHOWS,
   toneForAssignmentGrade,
   toneForAssignmentStatus,
   toneForBeatStatus,
 } from "@/lib/constants";
 import { formatDate, formatDateTime, today } from "@/lib/format";
 import type {
-  Assignment,
-  AssignmentGrade,
   CreateBeatAssignmentInput,
   CreateImprovementAssignmentInput,
-  CreatePersonInput,
   ProductionInput,
   ReviewAssignmentInput,
   SessionState,
@@ -39,8 +34,8 @@ interface AssignmentsPageProps {
   busy: boolean;
 }
 
-const emptyImprovementForm = (writerId: string, podLeadId: string): CreateImprovementAssignmentInput => ({
-  show: SHOWS[0],
+const emptyImprovementForm = (show: string, writerId: string, podLeadId: string): CreateImprovementAssignmentInput => ({
+  show,
   angle: "",
   writerId,
   podLeadId,
@@ -54,9 +49,11 @@ const emptyImprovementForm = (writerId: string, podLeadId: string): CreateImprov
 
 export function AssignmentsPage({ snapshot, session, actions, busy }: AssignmentsPageProps) {
   const isManager = session.role !== "WRITER";
-  const writers = snapshot.people.filter((person) => person.role === "WRITER");
-  const podLeads = snapshot.people.filter((person) => person.role === "POD_LEAD");
-  const businessPeople = snapshot.people.filter((person) => person.role === "BUSINESS");
+  const showNames = useMemo(() => snapshot.shows.map((show) => show.name), [snapshot.shows]);
+  const writers = useMemo(() => snapshot.people.filter((person) => person.role === "WRITER"), [snapshot.people]);
+  const podLeads = useMemo(() => snapshot.people.filter((person) => person.role === "POD_LEAD"), [snapshot.people]);
+  const canCreateAssignments = writers.length > 0 && podLeads.length > 0;
+  const canCreateImprovements = canCreateAssignments && showNames.length > 0;
 
   const defaultPodLeadId = session.role === "POD_LEAD" ? session.personId : podLeads[0]?.id ?? "";
   const defaultWriterId = writers[0]?.id ?? "";
@@ -73,7 +70,7 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
   });
   const [improvementOpen, setImprovementOpen] = useState(false);
   const [improvementForm, setImprovementForm] = useState<CreateImprovementAssignmentInput>(
-    emptyImprovementForm(defaultWriterId, defaultPodLeadId),
+    emptyImprovementForm(showNames[0] || "", defaultWriterId, defaultPodLeadId),
   );
   const [submitAssignmentId, setSubmitAssignmentId] = useState<string | null>(null);
   const [submissionText, setSubmissionText] = useState("");
@@ -94,10 +91,15 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
     status: "",
     assignmentType: "",
   });
-  const [personForm, setPersonForm] = useState<CreatePersonInput>({
-    name: "",
-    role: "WRITER",
-  });
+
+  useEffect(() => {
+    setImprovementForm((current) => ({
+      ...current,
+      show: showNames.includes(current.show) ? current.show : showNames[0] ?? "",
+      writerId: writers.some((writer) => writer.id === current.writerId) ? current.writerId : defaultWriterId,
+      podLeadId: podLeads.some((podLead) => podLead.id === current.podLeadId) ? current.podLeadId : defaultPodLeadId,
+    }));
+  }, [defaultPodLeadId, defaultWriterId, podLeads, showNames, writers]);
 
   const pendingReviews = snapshot.assignments
     .filter((assignment) => assignment.status === "COMPLETED_BY_WRITER")
@@ -162,7 +164,7 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
     event.preventDefault();
     await actions.createImprovementAssignment(improvementForm);
     setImprovementOpen(false);
-    setImprovementForm(emptyImprovementForm(defaultWriterId, defaultPodLeadId));
+    setImprovementForm(emptyImprovementForm(showNames[0] || "", defaultWriterId, defaultPodLeadId));
   }
 
   async function handleSubmitAssignment(event: React.FormEvent<HTMLFormElement>) {
@@ -203,12 +205,6 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
 
     await actions.markAssignmentReady(productionTarget.id, productionForm);
     setProductionAssignmentId(null);
-  }
-
-  async function handleCreatePerson(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    await actions.createPerson(personForm);
-    setPersonForm({ name: "", role: "WRITER" });
   }
 
   return (
@@ -281,6 +277,13 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
 
       {isManager ? (
         <Panel title="Approved beats ready for assignment" description="Approved beats that do not yet have a writing assignment.">
+          {!canCreateAssignments ? (
+            <div className="callout callout-danger">
+              <strong>Writers and POD leads are required</strong>
+              <p>Add at least one writer and one POD lead from the Admin tab before creating assignments.</p>
+            </div>
+          ) : null}
+
           {readyForAssignment.length === 0 ? (
             <EmptyState title="Everything is assigned" description="All approved beats already have a writer." />
           ) : (
@@ -314,7 +317,12 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                     ))}
                   </div>
                   <div className="button-row">
-                    <button className="secondary-button" type="button" onClick={() => openAssignBeat(beat.id)}>
+                    <button
+                      className="secondary-button"
+                      disabled={!canCreateAssignments}
+                      type="button"
+                      onClick={() => openAssignBeat(beat.id)}
+                    >
                       Assign to writer
                     </button>
                   </div>
@@ -330,11 +338,23 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
           title="Improvement requests"
           description="Track rework assignments and create new improvement briefs."
           action={
-            <button className="secondary-button" type="button" onClick={() => setImprovementOpen(true)}>
+            <button
+              className="secondary-button"
+              disabled={!canCreateImprovements}
+              type="button"
+              onClick={() => setImprovementOpen(true)}
+            >
               New improvement request
             </button>
           }
         >
+          {!canCreateImprovements ? (
+            <div className="callout callout-danger">
+              <strong>Shows, writers, and POD leads are required</strong>
+              <p>Add the missing setup data from the Admin tab before creating improvement briefs.</p>
+            </div>
+          ) : null}
+
           {openImprovements.length === 0 ? (
             <EmptyState title="No improvement work yet" description="Create a rework request when a script needs a fresh pass." />
           ) : (
@@ -598,67 +618,6 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
         )}
       </Panel>
 
-      {isManager ? (
-        <Panel title="Team settings" description="Maintain the lightweight role directory used by the workflow app.">
-          <div className="people-columns">
-            {[
-              { label: "Writers", list: writers },
-              { label: "POD Leads", list: podLeads },
-              { label: "Business", list: businessPeople },
-            ].map((group) => (
-              <div className="people-column" key={group.label}>
-                <h3>{group.label}</h3>
-                <div className="stack-list compact-list">
-                  {group.list.map((person) => (
-                    <div className="person-row" key={person.id}>
-                      <span>{person.name}</span>
-                      <button className="ghost-button danger-text" type="button" onClick={() => void actions.removePerson(person.id)}>
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <form className="form-three-up" onSubmit={handleCreatePerson}>
-            <label className="field">
-              <span>Name</span>
-              <input
-                value={personForm.name}
-                onChange={(event) => setPersonForm((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Add a new teammate"
-              />
-            </label>
-            <label className="field">
-              <span>Role</span>
-              <select
-                value={personForm.role}
-                onChange={(event) =>
-                  setPersonForm((current) => ({
-                    ...current,
-                    role: event.target.value as CreatePersonInput["role"],
-                  }))
-                }
-              >
-                {Object.entries(PERSON_ROLE_LABELS).map(([role, label]) => (
-                  <option key={role} value={role}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="field field-action">
-              <span>Action</span>
-              <button className="secondary-button" disabled={busy} type="submit">
-                Add person
-              </button>
-            </div>
-          </form>
-        </Panel>
-      ) : null}
-
       {assignTarget ? (
         <Modal title={`Assign ${assignTarget.code}`} onClose={() => setAssignBeatId(null)}>
           <form className="form-stack" onSubmit={handleCreateAssignmentFromBeat}>
@@ -758,7 +717,7 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
                     }))
                   }
                 >
-                  {SHOWS.map((show) => (
+                  {showNames.map((show) => (
                     <option key={show} value={show}>
                       {show}
                     </option>

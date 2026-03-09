@@ -9,7 +9,6 @@ import {
   IDEA_RANK_OPTIONS,
   IDEA_STATUS_LABELS,
   IDEA_STATUS_OPTIONS,
-  SHOWS,
   toneForIdeaRank,
   toneForIdeaStatus,
 } from "@/lib/constants";
@@ -31,7 +30,7 @@ interface IdeasPageProps {
 }
 
 const emptyIdeaForm = (submittedById: string): CreateIdeaInput => ({
-  show: SHOWS[0],
+  show: "",
   angle: "",
   submittedById,
   submittedOn: today(),
@@ -67,6 +66,7 @@ function createBeatDraft(idea: Idea, assignedToId: string): CreateBeatInput {
 export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) {
   const isManager = session.role !== "WRITER";
   const assignablePeople = snapshot.people.filter((person) => person.role === "WRITER" || person.role === "POD_LEAD");
+  const showNames = useMemo(() => snapshot.shows.map((show) => show.name), [snapshot.shows]);
   const [ideaForm, setIdeaForm] = useState<CreateIdeaInput>(() => emptyIdeaForm(session.personId));
   const [filters, setFilters] = useState({
     show: "",
@@ -78,14 +78,12 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
   const [beatForm, setBeatForm] = useState<CreateBeatInput | null>(null);
 
   useEffect(() => {
-    setIdeaForm((current) => {
-      if (current.submittedById) {
-        return current;
-      }
-
-      return emptyIdeaForm(session.personId);
-    });
-  }, [session.personId]);
+    setIdeaForm((current) => ({
+      ...current,
+      show: current.show || showNames[0] || "",
+      submittedById: session.personId,
+    }));
+  }, [session.personId, showNames]);
 
   const selectedIdea = snapshot.ideas.find((idea) => idea.id === selectedIdeaId) ?? null;
 
@@ -101,7 +99,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
   async function handleCreateIdea(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await actions.createIdea(ideaForm);
-    setIdeaForm(emptyIdeaForm(ideaForm.submittedById));
+    setIdeaForm(emptyIdeaForm(session.personId));
   }
 
   async function handleCreateBeat(event: React.FormEvent<HTMLFormElement>) {
@@ -128,6 +126,13 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
           title="Submit a new idea"
           description="Capture angle, beat framing, and ownership in the same record."
         >
+          {showNames.length === 0 ? (
+            <div className="callout callout-danger">
+              <strong>Add a show first</strong>
+              <p>Use the Admin tab to create at least one show before submitting ideas.</p>
+            </div>
+          ) : null}
+
           <form className="form-stack" onSubmit={handleCreateIdea}>
             <div className="form-two-up">
               <label className="field">
@@ -136,7 +141,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
                   value={ideaForm.show}
                   onChange={(event) => setIdeaForm((current) => ({ ...current, show: event.target.value }))}
                 >
-                  {SHOWS.map((show) => (
+                  {showNames.map((show) => (
                     <option key={show} value={show}>
                       {show}
                     </option>
@@ -146,19 +151,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
 
               <label className="field">
                 <span>Submitted by</span>
-                <select
-                  value={ideaForm.submittedById}
-                  onChange={(event) =>
-                    setIdeaForm((current) => ({ ...current, submittedById: event.target.value }))
-                  }
-                >
-                  <option value="">Select a person</option>
-                  {snapshot.people.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.name}
-                    </option>
-                  ))}
-                </select>
+                <input readOnly value={session.personName} />
               </label>
             </div>
 
@@ -207,7 +200,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
             </div>
 
             <div className="button-row">
-              <button className="primary-button" disabled={busy} type="submit">
+              <button className="primary-button" disabled={busy || showNames.length === 0} type="submit">
                 Save idea
               </button>
             </div>
@@ -220,7 +213,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
               <span>Show</span>
               <select value={filters.show} onChange={(event) => setFilters((current) => ({ ...current, show: event.target.value }))}>
                 <option value="">All shows</option>
-                {SHOWS.map((show) => (
+                {showNames.map((show) => (
                   <option key={show} value={show}>
                     {show}
                   </option>

@@ -18,6 +18,11 @@ export interface Person {
   role: PersonRole;
 }
 
+export interface Show {
+  id: string;
+  name: string;
+}
+
 export interface Idea {
   id: string;
   code: string;
@@ -105,6 +110,7 @@ export interface Assignment {
 }
 
 export interface WorkflowSnapshot {
+  shows: Show[];
   people: Person[];
   ideas: Idea[];
   beats: Beat[];
@@ -207,12 +213,17 @@ export interface CreatePersonInput {
   role: PersonRole;
 }
 
+export interface CreateShowInput {
+  name: string;
+}
+
 export interface ReviewAssignmentResult {
   createdRedoCode: string | null;
 }
 
 export interface WorkflowActions {
   refresh(): Promise<void>;
+  validateAdminPassword(password: string): Promise<void>;
   createIdea(input: CreateIdeaInput): Promise<void>;
   reviewIdea(id: string, input: ReviewIdeaInput): Promise<void>;
   createBeat(input: CreateBeatInput): Promise<void>;
@@ -225,4 +236,6 @@ export interface WorkflowActions {
   markAssignmentReady(id: string, input: ProductionInput): Promise<void>;
   createPerson(input: CreatePersonInput): Promise<void>;
   removePerson(id: string): Promise<void>;
+  createShow(input: CreateShowInput): Promise<void>;
+  removeShow(id: string): Promise<void>;
 }

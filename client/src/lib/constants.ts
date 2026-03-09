@@ -9,8 +9,6 @@ import type {
   ProductionType,
 } from "./types";
 
-export const SHOWS = ["MVS", "FLBM", "WBT"];
-
 export const PERSON_ROLE_LABELS: Record<PersonRole, string> = {
   WRITER: "Writer",
   POD_LEAD: "POD Lead",
