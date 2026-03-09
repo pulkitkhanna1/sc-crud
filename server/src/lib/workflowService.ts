@@ -163,33 +163,18 @@ function serializeAdminLog(log: {
   };
 }
 
-async function ensureDefaultShows(tx: Prisma.TransactionClient) {
-  for (const name of DEFAULT_SHOWS) {
-    await tx.show.upsert({
-      where: { name },
-      update: {},
-      create: { name },
-    });
-  }
+async function ensureDefaultShows() {
+  await prisma.show.createMany({
+    data: DEFAULT_SHOWS.map((name) => ({ name })),
+    skipDuplicates: true,
+  });
 }
 
-async function ensureDefaultSchemaVariables(tx: Prisma.TransactionClient) {
-  for (const variable of DEFAULT_SCHEMA_VARIABLES) {
-    await tx.schemaVariable.upsert({
-      where: {
-        category_value: {
-          category: variable.category,
-          value: variable.value,
-        },
-      },
-      update: {
-        label: variable.label,
-        sortOrder: variable.sortOrder,
-        isCore: variable.isCore,
-      },
-      create: variable,
-    });
-  }
+async function ensureDefaultSchemaVariables() {
+  await prisma.schemaVariable.createMany({
+    data: DEFAULT_SCHEMA_VARIABLES.map((variable) => ({ ...variable })),
+    skipDuplicates: true,
+  });
 }
 
 function formatDate(date: Date | null) {
@@ -435,47 +420,44 @@ function serializeAssignment(
 }
 
 export async function getWorkflowSnapshot() {
-  return prisma.$transaction(async (tx) => {
-    await ensureDefaultShows(tx);
-    await ensureDefaultSchemaVariables(tx);
+  await Promise.all([ensureDefaultShows(), ensureDefaultSchemaVariables()]);
 
-    const [shows, schemaVariables, people, ideas, beats, assignments, adminLogs] = await Promise.all([
-      tx.show.findMany({
-        orderBy: { name: "asc" },
-      }),
-      tx.schemaVariable.findMany({
-        orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { label: "asc" }],
-      }),
-      tx.person.findMany({
-        orderBy: [{ role: "asc" }, { name: "asc" }],
-      }),
-      tx.idea.findMany({
-        include: ideaInclude,
-        orderBy: { submittedOn: "desc" },
-      }),
-      tx.beat.findMany({
-        include: beatInclude,
-        orderBy: { requestRaisedOn: "desc" },
-      }),
-      tx.assignment.findMany({
-        include: assignmentInclude,
-        orderBy: { dateAssigned: "desc" },
-      }),
-      tx.adminLog.findMany({
-        orderBy: { createdAt: "desc" },
-      }),
-    ]);
+  const [shows, schemaVariables, people, ideas, beats, assignments, adminLogs] = await Promise.all([
+    prisma.show.findMany({
+      orderBy: { name: "asc" },
+    }),
+    prisma.schemaVariable.findMany({
+      orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { label: "asc" }],
+    }),
+    prisma.person.findMany({
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
+    prisma.idea.findMany({
+      include: ideaInclude,
+      orderBy: { submittedOn: "desc" },
+    }),
+    prisma.beat.findMany({
+      include: beatInclude,
+      orderBy: { requestRaisedOn: "desc" },
+    }),
+    prisma.assignment.findMany({
+      include: assignmentInclude,
+      orderBy: { dateAssigned: "desc" },
+    }),
+    prisma.adminLog.findMany({
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
-    return {
-      shows: shows.map(serializeShow),
-      schemaVariables: schemaVariables.map(serializeSchemaVariable),
-      people: people.map(serializePerson),
-      ideas: ideas.map(serializeIdea),
-      beats: beats.map(serializeBeat),
-      assignments: assignments.map(serializeAssignment),
-      adminLogs: adminLogs.map(serializeAdminLog),
-    };
-  });
+  return {
+    shows: shows.map(serializeShow),
+    schemaVariables: schemaVariables.map(serializeSchemaVariable),
+    people: people.map(serializePerson),
+    ideas: ideas.map(serializeIdea),
+    beats: beats.map(serializeBeat),
+    assignments: assignments.map(serializeAssignment),
+    adminLogs: adminLogs.map(serializeAdminLog),
+  };
 }
 
 export async function createIdea(payload: Record<string, unknown>) {
