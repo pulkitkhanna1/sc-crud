@@ -4,6 +4,7 @@ import { Panel } from "@/components/Panel";
 import { toneForAssignmentStatus, toneForBeatStatus, toneForIdeaStatus } from "@/lib/constants";
 import { formatDate, formatDateTime, isPastDate } from "@/lib/format";
 import { getSchemaVariableLabel, getSchemaVariableLabelMap, getSchemaVariables } from "@/lib/schemaVariables";
+import { getVisibleAssignments, getVisibleBeats, getVisibleIdeas } from "@/lib/visibility";
 import type { SessionState, WorkflowSnapshot } from "@/lib/types";
 
 interface OverviewPageProps {
@@ -22,26 +23,29 @@ export function OverviewPage({ snapshot, session }: OverviewPageProps) {
   const ideaStatuses = getSchemaVariables(snapshot, "IDEA_STATUS");
   const beatStatuses = getSchemaVariables(snapshot, "BEAT_STATUS");
   const assignmentStatuses = getSchemaVariables(snapshot, "ASSIGNMENT_STATUS");
-  const ideaCounts = countBy(snapshot.ideas.map((item) => item.status));
-  const beatCounts = countBy(snapshot.beats.map((item) => item.status));
-  const assignmentCounts = countBy(snapshot.assignments.map((item) => item.status));
+  const visibleAssignments = getVisibleAssignments(snapshot, session);
+  const visibleBeats = getVisibleBeats(snapshot, session, visibleAssignments);
+  const visibleIdeas = getVisibleIdeas(snapshot, session, visibleBeats);
+  const ideaCounts = countBy(visibleIdeas.map((item) => item.status));
+  const beatCounts = countBy(visibleBeats.map((item) => item.status));
+  const assignmentCounts = countBy(visibleAssignments.map((item) => item.status));
   const beatStatusLabels = getSchemaVariableLabelMap(snapshot, "BEAT_STATUS");
   const assignmentStatusLabels = getSchemaVariableLabelMap(snapshot, "ASSIGNMENT_STATUS");
 
-  const pendingBeatReviews = snapshot.beats
+  const pendingBeatReviews = visibleBeats
     .filter((beat) => beat.status === "SUBMITTED")
     .sort((left, right) => String(left.expectedCompleteDate).localeCompare(String(right.expectedCompleteDate)));
 
-  const pendingScriptReviews = snapshot.assignments
+  const pendingScriptReviews = visibleAssignments
     .filter((assignment) => assignment.status === "COMPLETED_BY_WRITER")
     .sort((left, right) => String(left.submittedAt).localeCompare(String(right.submittedAt)));
 
-  const upcomingAssignments = snapshot.assignments
+  const upcomingAssignments = visibleAssignments
     .filter((assignment) => assignment.status !== "READY_FOR_PRODUCTION")
     .sort((left, right) => String(left.dateDue).localeCompare(String(right.dateDue)))
     .slice(0, 6);
 
-  const readyForProduction = snapshot.assignments
+  const readyForProduction = visibleAssignments
     .filter((assignment) => assignment.status === "READY_FOR_PRODUCTION")
     .sort((left, right) => String(right.productionReadyAt).localeCompare(String(left.productionReadyAt)))
     .slice(0, 6);
@@ -65,17 +69,17 @@ export function OverviewPage({ snapshot, session }: OverviewPageProps) {
       <div className="metrics-grid">
         <div className="metric-card">
           <span>Ideas</span>
-          <strong>{snapshot.ideas.length}</strong>
+          <strong>{visibleIdeas.length}</strong>
           <p>{ideaCounts.ACCEPTED ?? 0} accepted</p>
         </div>
         <div className="metric-card">
           <span>Beats</span>
-          <strong>{snapshot.beats.length}</strong>
+          <strong>{visibleBeats.length}</strong>
           <p>{beatCounts.APPROVED_FOR_SCRIPT_WRITING ?? 0} script-ready</p>
         </div>
         <div className="metric-card">
           <span>Assignments</span>
-          <strong>{snapshot.assignments.length}</strong>
+          <strong>{visibleAssignments.length}</strong>
           <p>{assignmentCounts.COMPLETED_BY_WRITER ?? 0} awaiting review</p>
         </div>
         <div className="metric-card">

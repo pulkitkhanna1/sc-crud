@@ -7,6 +7,7 @@ import { Panel } from "@/components/Panel";
 import { toneForIdeaRank, toneForIdeaStatus } from "@/lib/constants";
 import { formatDate, today } from "@/lib/format";
 import { getSchemaVariableLabelMap, getSchemaVariableOptions } from "@/lib/schemaVariables";
+import { getVisibleBeats, getVisibleIdeas } from "@/lib/visibility";
 import type {
   CreateBeatInput,
   CreateIdeaInput,
@@ -66,6 +67,17 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
   const ideaRankLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "IDEA_RANK"), [snapshot]);
   const beatAssigneeRoleOptions = useMemo(() => getSchemaVariableOptions(snapshot, "BEAT_ASSIGNEE_ROLE"), [snapshot]);
   const beatAssigneeRoleLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "BEAT_ASSIGNEE_ROLE"), [snapshot]);
+  const visibleBeats = useMemo(() => getVisibleBeats(snapshot, session), [session, snapshot]);
+  const visibleIdeas = useMemo(() => getVisibleIdeas(snapshot, session, visibleBeats), [session, snapshot, visibleBeats]);
+  const visibleSubmitters = useMemo(
+    () =>
+      visibleIdeas
+        .map((idea) => idea.submittedById)
+        .filter((personId, index, values) => values.indexOf(personId) === index)
+        .map((personId) => snapshot.people.find((person) => person.id === personId))
+        .filter((person): person is (typeof snapshot.people)[number] => Boolean(person)),
+    [snapshot.people, visibleIdeas],
+  );
   const assignablePeople = useMemo(
     () => snapshot.people.filter((person) => beatAssigneeRoleOptions.includes(person.role)),
     [beatAssigneeRoleOptions, snapshot.people],
@@ -88,7 +100,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
     }));
   }, [session.personId, showNames]);
 
-  const selectedIdea = snapshot.ideas.find((idea) => idea.id === selectedIdeaId) ?? null;
+  const selectedIdea = visibleIdeas.find((idea) => idea.id === selectedIdeaId) ?? null;
   const availableBeatAssignees = useMemo(() => {
     if (!beatForm) {
       return [];
@@ -98,13 +110,13 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
   }, [assignablePeople, beatForm]);
 
   const filteredIdeas = useMemo(() => {
-    return [...snapshot.ideas]
+    return [...visibleIdeas]
       .filter((idea) => (filters.show ? idea.show === filters.show : true))
       .filter((idea) => (filters.status ? idea.status === filters.status : true))
       .filter((idea) => (filters.rank ? idea.rank === filters.rank : true))
       .filter((idea) => (filters.submittedById ? idea.submittedById === filters.submittedById : true))
       .sort((left, right) => String(right.submittedOn).localeCompare(String(left.submittedOn)));
-  }, [filters, snapshot.ideas]);
+  }, [filters, visibleIdeas]);
 
   async function handleCreateIdea(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -276,7 +288,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
                 }
               >
                 <option value="">Everyone</option>
-                {snapshot.people.map((person) => (
+                {visibleSubmitters.map((person) => (
                   <option key={person.id} value={person.id}>
                     {person.name}
                   </option>
@@ -293,7 +305,7 @@ export function IdeasPage({ snapshot, session, actions, busy }: IdeasPageProps) 
         ) : (
           <div className="stack-list">
             {filteredIdeas.map((idea) => {
-              const relatedBeats = snapshot.beats.filter((beat) => beat.ideaId === idea.id);
+              const relatedBeats = visibleBeats.filter((beat) => beat.ideaId === idea.id);
 
               return (
                 <article className="entity-card" key={idea.id}>

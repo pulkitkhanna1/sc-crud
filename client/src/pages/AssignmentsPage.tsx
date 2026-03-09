@@ -11,6 +11,7 @@ import {
 } from "@/lib/constants";
 import { formatDate, formatDateTime, today } from "@/lib/format";
 import { getSchemaVariableLabelMap, getSchemaVariableOptions } from "@/lib/schemaVariables";
+import { getVisibleAssignments, getVisibleBeats } from "@/lib/visibility";
 import type {
   CreateBeatAssignmentInput,
   CreateImprovementAssignmentInput,
@@ -53,6 +54,8 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
   const productionTypeOptions = useMemo(() => getSchemaVariableOptions(snapshot, "PRODUCTION_TYPE"), [snapshot]);
   const productionTypeLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "PRODUCTION_TYPE"), [snapshot]);
   const beatStatusLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "BEAT_STATUS"), [snapshot]);
+  const visibleAssignments = useMemo(() => getVisibleAssignments(snapshot, session), [session, snapshot]);
+  const visibleBeats = useMemo(() => getVisibleBeats(snapshot, session, visibleAssignments), [session, snapshot, visibleAssignments]);
   const writers = useMemo(() => snapshot.people.filter((person) => person.role === "WRITER"), [snapshot.people]);
   const podLeads = useMemo(() => snapshot.people.filter((person) => person.role === "POD_LEAD"), [snapshot.people]);
   const canCreateAssignments = writers.length > 0 && podLeads.length > 0;
@@ -104,24 +107,24 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
     }));
   }, [defaultPodLeadId, defaultWriterId, podLeads, showNames, writers]);
 
-  const pendingReviews = snapshot.assignments
+  const pendingReviews = visibleAssignments
     .filter((assignment) => assignment.status === "COMPLETED_BY_WRITER")
     .sort((left, right) => String(right.submittedAt).localeCompare(String(left.submittedAt)));
 
-  const myAssignments = snapshot.assignments
+  const myAssignments = visibleAssignments
     .filter((assignment) => assignment.writerId === session.personId)
     .sort((left, right) => String(right.dateAssigned).localeCompare(String(left.dateAssigned)));
 
-  const openImprovements = snapshot.assignments
+  const openImprovements = visibleAssignments
     .filter((assignment) => assignment.assignmentType === "IMPROVEMENT")
     .sort((left, right) => String(right.dateAssigned).localeCompare(String(left.dateAssigned)));
 
-  const approvedBeats = snapshot.beats.filter((beat) => beat.status === "APPROVED_FOR_SCRIPT_WRITING");
+  const approvedBeats = visibleBeats.filter((beat) => beat.status === "APPROVED_FOR_SCRIPT_WRITING");
   const assignedBeatIds = new Set(snapshot.assignments.filter((assignment) => assignment.beatId).map((assignment) => assignment.beatId));
   const readyForAssignment = approvedBeats.filter((beat) => !assignedBeatIds.has(beat.id));
 
   const filteredAssignments = useMemo(() => {
-    return [...snapshot.assignments]
+    return [...visibleAssignments]
       .filter((assignment) => {
         const needle = filters.search.trim().toLowerCase();
         if (!needle) {
@@ -137,12 +140,12 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
       .filter((assignment) => (filters.status ? assignment.status === filters.status : true))
       .filter((assignment) => (filters.assignmentType ? assignment.assignmentType === filters.assignmentType : true))
       .sort((left, right) => String(right.dateAssigned).localeCompare(String(left.dateAssigned)));
-  }, [filters, snapshot.assignments]);
+  }, [filters, visibleAssignments]);
 
-  const assignTarget = snapshot.beats.find((beat) => beat.id === assignBeatId) ?? null;
-  const submitTarget = snapshot.assignments.find((assignment) => assignment.id === submitAssignmentId) ?? null;
-  const reviewTarget = snapshot.assignments.find((assignment) => assignment.id === reviewAssignmentId) ?? null;
-  const productionTarget = snapshot.assignments.find((assignment) => assignment.id === productionAssignmentId) ?? null;
+  const assignTarget = visibleBeats.find((beat) => beat.id === assignBeatId) ?? null;
+  const submitTarget = visibleAssignments.find((assignment) => assignment.id === submitAssignmentId) ?? null;
+  const reviewTarget = visibleAssignments.find((assignment) => assignment.id === reviewAssignmentId) ?? null;
+  const productionTarget = visibleAssignments.find((assignment) => assignment.id === productionAssignmentId) ?? null;
 
   function openAssignBeat(beatId: string) {
     setAssignBeatId(beatId);
@@ -230,7 +233,7 @@ export function AssignmentsPage({ snapshot, session, actions, busy }: Assignment
         </div>
         <div className="metric-card">
           <span>Production ready</span>
-          <strong>{snapshot.assignments.filter((assignment) => assignment.status === "READY_FOR_PRODUCTION").length}</strong>
+          <strong>{visibleAssignments.filter((assignment) => assignment.status === "READY_FOR_PRODUCTION").length}</strong>
           <p>scripts ready for downstream use</p>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Panel } from "@/components/Panel";
 import { formatDateTime } from "@/lib/format";
 import { getSchemaVariableLabel, getSchemaVariableLabelMap, getSchemaVariableOptions } from "@/lib/schemaVariables";
+import { getVisibleAssignments } from "@/lib/visibility";
 import type { SessionState, WorkflowSnapshot } from "@/lib/types";
 
 interface ProductionPageProps {
@@ -15,6 +16,7 @@ interface ProductionPageProps {
 export function ProductionPage({ snapshot, session }: ProductionPageProps) {
   const productionTypeOptions = useMemo(() => getSchemaVariableOptions(snapshot, "PRODUCTION_TYPE"), [snapshot]);
   const productionTypeLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "PRODUCTION_TYPE"), [snapshot]);
+  const visibleAssignments = useMemo(() => getVisibleAssignments(snapshot, session), [session, snapshot]);
   const [filters, setFilters] = useState({
     code: "",
     writerId: "",
@@ -26,14 +28,14 @@ export function ProductionPage({ snapshot, session }: ProductionPageProps) {
   const podLeads = snapshot.people.filter((person) => person.role === "POD_LEAD");
 
   const rows = useMemo(() => {
-    return snapshot.assignments
+    return visibleAssignments
       .filter((assignment) => assignment.status === "READY_FOR_PRODUCTION")
       .filter((assignment) => (filters.code ? assignment.code.toLowerCase().includes(filters.code.toLowerCase()) : true))
       .filter((assignment) => (filters.writerId ? assignment.writerId === filters.writerId : true))
       .filter((assignment) => (filters.podLeadId ? assignment.podLeadId === filters.podLeadId : true))
       .filter((assignment) => (filters.prodSuffix ? assignment.prodSuffix === filters.prodSuffix : true))
       .sort((left, right) => String(right.productionReadyAt).localeCompare(String(left.productionReadyAt)));
-  }, [filters, snapshot.assignments]);
+  }, [filters, visibleAssignments]);
 
   return (
     <div className="page-stack">

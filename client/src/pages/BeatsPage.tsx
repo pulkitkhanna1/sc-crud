@@ -7,6 +7,7 @@ import { Panel } from "@/components/Panel";
 import { toneForBeatStatus } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import { getSchemaVariableLabelMap, getSchemaVariableOptions } from "@/lib/schemaVariables";
+import { getVisibleAssignments, getVisibleBeats, getVisibleIdeas } from "@/lib/visibility";
 import type { ReviewBeatInput, SessionState, WorkflowActions, WorkflowSnapshot } from "@/lib/types";
 
 interface BeatsPageProps {
@@ -21,6 +22,9 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
   const beatStatusLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "BEAT_STATUS"), [snapshot]);
   const beatAssigneeRoleOptions = useMemo(() => getSchemaVariableOptions(snapshot, "BEAT_ASSIGNEE_ROLE"), [snapshot]);
   const beatAssigneeRoleLabels = useMemo(() => getSchemaVariableLabelMap(snapshot, "BEAT_ASSIGNEE_ROLE"), [snapshot]);
+  const visibleAssignments = useMemo(() => getVisibleAssignments(snapshot, session), [session, snapshot]);
+  const baseVisibleBeats = useMemo(() => getVisibleBeats(snapshot, session, visibleAssignments), [session, snapshot, visibleAssignments]);
+  const visibleIdeas = useMemo(() => getVisibleIdeas(snapshot, session, baseVisibleBeats), [session, snapshot, baseVisibleBeats]);
   const reviewDecisionOptions = useMemo(
     () => beatStatusOptions.filter((status) => status === "APPROVED_FOR_SCRIPT_WRITING" || status === "TO_BE_REDONE"),
     [beatStatusOptions],
@@ -39,20 +43,23 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
     notes: "",
   });
   const assignablePeople = useMemo(
-    () => snapshot.people.filter((person) => beatAssigneeRoleOptions.includes(person.role)),
-    [beatAssigneeRoleOptions, snapshot.people],
+    () =>
+      snapshot.people.filter(
+        (person) => beatAssigneeRoleOptions.includes(person.role) && baseVisibleBeats.some((beat) => beat.assignedToId === person.id),
+      ),
+    [baseVisibleBeats, beatAssigneeRoleOptions, snapshot.people],
   );
 
   const visibleBeats = useMemo(() => {
-    return [...snapshot.beats]
+    return [...baseVisibleBeats]
       .filter((beat) => (filters.status ? beat.status === filters.status : true))
       .filter((beat) => (filters.assignedToId ? beat.assignedToId === filters.assignedToId : true))
       .filter((beat) => (filters.ideaId ? beat.ideaId === filters.ideaId : true))
       .sort((left, right) => String(right.requestRaisedOn).localeCompare(String(left.requestRaisedOn)));
-  }, [filters, snapshot.beats]);
+  }, [baseVisibleBeats, filters]);
 
-  const submitTarget = snapshot.beats.find((beat) => beat.id === submitBeatId) ?? null;
-  const reviewTarget = snapshot.beats.find((beat) => beat.id === reviewBeatId) ?? null;
+  const submitTarget = visibleBeats.find((beat) => beat.id === submitBeatId) ?? null;
+  const reviewTarget = visibleBeats.find((beat) => beat.id === reviewBeatId) ?? null;
   async function handleSubmitBeat(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -111,7 +118,7 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
             <span>Idea</span>
             <select value={filters.ideaId} onChange={(event) => setFilters((current) => ({ ...current, ideaId: event.target.value }))}>
               <option value="">All ideas</option>
-              {snapshot.ideas.map((idea) => (
+              {visibleIdeas.map((idea) => (
                 <option key={idea.id} value={idea.id}>
                   {idea.code} · {idea.angle}
                 </option>
@@ -125,7 +132,7 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
         {beatStatusOptions.map((status) => (
           <div className="metric-card" key={status}>
             <span>{beatStatusLabels[status] ?? status}</span>
-            <strong>{snapshot.beats.filter((beat) => beat.status === status).length}</strong>
+            <strong>{baseVisibleBeats.filter((beat) => beat.status === status).length}</strong>
             <p>beats</p>
           </div>
         ))}
@@ -229,14 +236,14 @@ export function BeatsPage({ snapshot, session, actions, busy }: BeatsPageProps) 
                         className="secondary-button"
                         type="button"
                         onClick={() => {
-                        setReviewBeatId(beat.id);
-                        setReviewForm({
-                          decision: "APPROVED_FOR_SCRIPT_WRITING",
-                          reviewedById: session.personId,
-                          notes: beat.reviewNotes ?? "",
-                        });
-                      }}
-                    >
+                          setReviewBeatId(beat.id);
+                          setReviewForm({
+                            decision: "APPROVED_FOR_SCRIPT_WRITING",
+                            reviewedById: session.personId,
+                            notes: beat.reviewNotes ?? "",
+                          });
+                        }}
+                      >
                         Review beat
                       </button>
                     ) : null}
