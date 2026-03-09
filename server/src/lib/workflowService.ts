@@ -645,6 +645,14 @@ export async function createPerson(payload: Record<string, unknown>) {
   const role = parseEnumValue(payload.role, PERSON_ROLE_VALUES, "Role");
 
   return prisma.$transaction(async (tx) => {
+    const existingPerson = await tx.person.findUnique({
+      where: { name },
+    });
+
+    if (existingPerson) {
+      throw new AppError("A team member with this name already exists.", 409);
+    }
+
     const person = await tx.person.create({
       data: {
         name,
@@ -671,6 +679,25 @@ export async function createShow(payload: Record<string, unknown>) {
   const name = requireString(payload.name, "Show name");
 
   return prisma.$transaction(async (tx) => {
+    const existingShow = await tx.show.findUnique({
+      where: { name },
+    });
+
+    if (existingShow) {
+      await recordAdminLog(tx, {
+        action: "CREATE_SHOW_SKIPPED",
+        targetType: "SHOW",
+        targetId: existingShow.id,
+        targetLabel: existingShow.name,
+        payload: {
+          name,
+          reason: "Show already exists",
+        },
+      });
+
+      return existingShow;
+    }
+
     const show = await tx.show.create({
       data: {
         name,
