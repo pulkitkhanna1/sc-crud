@@ -163,20 +163,6 @@ function serializeAdminLog(log: {
   };
 }
 
-async function ensureDefaultShows() {
-  await prisma.show.createMany({
-    data: DEFAULT_SHOWS.map((name) => ({ name })),
-    skipDuplicates: true,
-  });
-}
-
-async function ensureDefaultSchemaVariables() {
-  await prisma.schemaVariable.createMany({
-    data: DEFAULT_SCHEMA_VARIABLES.map((variable) => ({ ...variable })),
-    skipDuplicates: true,
-  });
-}
-
 function formatDate(date: Date | null) {
   return date ? date.toISOString().slice(0, 10) : null;
 }
@@ -420,8 +406,6 @@ function serializeAssignment(
 }
 
 export async function getWorkflowSnapshot() {
-  await Promise.all([ensureDefaultShows(), ensureDefaultSchemaVariables()]);
-
   const [shows, schemaVariables, people, ideas, beats, assignments, adminLogs] = await Promise.all([
     prisma.show.findMany({
       orderBy: { name: "asc" },
